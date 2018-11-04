@@ -1,0 +1,6 @@
+README.md
+setup.py
+RIPTiDE.egg-info/PKG-INFO
+RIPTiDE.egg-info/SOURCES.txt
+RIPTiDE.egg-info/dependency_links.txt
+RIPTiDE.egg-info/top_level.txt
