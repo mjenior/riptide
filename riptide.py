@@ -59,7 +59,7 @@ def read_transcription_file(read_abundances_file, replicates=False, header=False
     return abund_dict
 
 
-# Converts a dictionary of transcript distribution percentiles (defaults: 90th, 75th, & 50th)
+# Converts a dictionary of transcript distribution percentiles (defaults: 95th, 75th, & 50th)
 # Based on:
 # Schultz, A, & Qutub, AA (2016). Reconstruction of Tissue-Specific Metabolic Networks Using CORDA. 
 #      PLoS Computational Biology. https://doi.org/10.1371/journal.pcbi.1004808
@@ -166,20 +166,20 @@ def parse_reaction_binning(model, percentiles, keep_rxns=[], remove_rxns=[]):
             if rxn.id in remove_rxns:
                 exclude |= set([rxn.id])
                 continue
-
+                
+        # Check if reaction in partition dictionary
+        try: 
+            test = percentiles[rxn.id]
+        except KeyError:
+            include |= set([rxn.id])
+            continue
+            
         # Define those reactions not considered in minimization steps
         if percentiles[rxn.id] == 0:
             include |= set([rxn.id])
             continue
         elif percentiles[rxn.id] == 5:
             exclude |= set([rxn.id])
-            continue
-
-        # Check if reaction in partition dictionary
-        try: 
-            test = percentiles[rxn.id]
-        except KeyError:
-            include |= set([rxn.id])
             continue
 
         # Assess remainder of reactions
@@ -199,6 +199,16 @@ def parse_reaction_binning(model, percentiles, keep_rxns=[], remove_rxns=[]):
             include |= set([rxn.id])  # If not found, automatically include in final model
 
     return include, exclude, perc_top, perc_hi, perc_mid, perc_lo
+
+
+# Read in user defined reactions to keep or exclude
+def read_user_defined_reactions(reaction_file):
+
+    with open(reaction_file, 'r') as reactions:
+        include_rxns = reactions.readline().split(',')
+        exclude_rxns = reactions.readline().split(',')
+
+    return include_rxns, exclude_rxns
 
 
 # Identify active reactions in a model
@@ -311,22 +321,19 @@ def prune_and_test(model, remove_rxn_ids):
 
 
 # Create context-specific model based on transcript distribution
-def contextualize(model, binning_dict, min_fraction=0.01, max_fraction=0.95, report=True, include_rxns=False, remove_rxns=False):
-    
+def contextualize(model, binning_dict, min_fraction=0.01, max_fraction=0.95, report=True, defined_rxns=False):
+
     # Format user defined reactions for keeping or removal
-    if include_rxns != False:
-        user_keep_list = str(include_rxns).split('-')
+    if defined_rxns != False:
+        user_keep_list, user_remove_list = read_user_defined_reactions(defined_rxns)
     else:
         user_keep_list = []
-    if remove_rxns != False:
-        user_remove_list = str(remove_rxns).split('-')
-    else:
         user_remove_list = []
 
     # Partition reactions based on transcription percentile intervals
     ignore, exclude, perc_top, perc_hi, perc_mid, perc_lo = parse_reaction_binning(model, binning_dict, user_keep_list, user_remove_list)
     
-    # Generating contextualized model
+    # Generate copy of old model for contextualization
     contextualized_model = copy.deepcopy(model)
     
     # Highest percentile reactions, excluding them in pFBA flux minization at 95% of optimal growth,
@@ -353,8 +360,8 @@ def contextualize(model, binning_dict, min_fraction=0.01, max_fraction=0.95, rep
     if len(exclude) > 0: contextualized_model = prune_and_test(contextualized_model, exclude)
 
     # Cross-reference all active reactions and all removed reactions and add back those where flux is sometimes parsimonious
-    total_active = set(list(active_top) + list(active_hi) + list(active_mid) + list(active_lo))
-    total_remove = set(list(final_remove_top) + list(final_remove_hi) + list(remove_mid) + list(remove_lo))
+    total_active = set(list(active_top) + list(active_hi) + list(active_mid) + list(active_lo) + list(ignore))
+    total_remove = set(list(final_remove_top) + list(final_remove_hi) + list(remove_mid) + list(remove_lo) + list(exclude))
     overlap_rxns = total_active.intersection(total_remove)
     salvaged_rxns = [model.reactions.get_by_id(rxn) for rxn in overlap_rxns]
     contextualized_model.add_reactions(salvaged_rxns)
@@ -417,3 +424,33 @@ Included in final model:             {included}
     if report == True: print(output_string)
     
     return contextualized_model
+
+
+# Compute relative doubling time (in minutes) from objective value
+def doubling_time(model):
+    
+    with model as m:
+        ov = m.slim_optimize()
+        growth = (1.0 / float(ov)) * 3600.0
+
+    return growth
+
+
+# Run whole contextualization protocol mutliple times and return fastest growing model
+def growth_optimize_by_context(model, binning_dict, min_fraction=0.01, max_fraction=0.95, defined_rxns=False, iters=5):
+
+    curr_iter = 1
+    doubling_rate = 100000000.0
+    while curr_iter <= iters:
+        curr_iter += 1
+        current_model = contextualize(model, binning_dict, min_fraction=min_fraction, max_fraction=max_fraction, report=False, defined_rxns=defined_rxns)
+
+        # Test growth rate
+        current_rate = doubling_time(current_model)
+        if current_rate < doubling_rate:
+            fast_model = copy.deepcopy(current_model)
+            doubling_rate = current_rate
+        else:
+            continue
+
+    return fast_model
