@@ -16,15 +16,15 @@ of mutliple transcription and flux minimization levels. BioRxiv. DOI
 
 Example usage 1:
 my_model = cobra.io.read_sbml_model('my_model.sbml')
-gene_bins = read_transcription_file('reads_to_genes.tsv', replicates=True)
-reaction_bins = create_reaction_partitions(my_model, gene_bins)
-contextualized_model = contextualize(my_model, reaction_bins, new_model_name)
+transcript_abundances = read_transcription_file('reads_to_genes.tsv', replicates=True)
+reaction_bins = create_reaction_partitions(my_model, transcript_abundances)
+contextualized_model = contextualize(my_model, reaction_bins, include_rxns=rxn1-rxn2, remove_rxns=rxn3-rxn4)
 
 Example usage 2:
 my_model = cobra.io.read_sbml_model('my_model.sbml')
 gene_bins = read_binning_file('gene_bins.tsv')
 reaction_bins = create_reaction_partitions(my_model, gene_bins)
-contextualized_model = contextualize(my_model, reaction_bins, new_model_name)
+contextualized_model = contextualize(my_model, reaction_bins)
 '''
 
 # Dependencies
@@ -64,7 +64,7 @@ def read_transcription_file(read_abundances_file, replicates=False, header=False
 # Schultz, A, & Qutub, AA (2016). Reconstruction of Tissue-Specific Metabolic Networks Using CORDA. 
 #      PLoS Computational Biology. https://doi.org/10.1371/journal.pcbi.1004808
 def create_reaction_partitions(model, transcription, save_bins_as=False, high_cutoff=95, mid_cutoff=75, low_cutoff=50):
-    
+
     # Define transcript abundance cutoffs
     distribution = transcription.values()
     perc_hi = numpy.percentile(distribution, high_cutoff)
@@ -145,7 +145,7 @@ def read_binning_file(partition_file):
 
 
 # Bin reactions based on their percentile transcription
-def parse_reaction_binning(model, percentiles):
+def parse_reaction_binning(model, percentiles, keep_rxns=[], remove_rxns=[]):
 
     include = set()
     exclude = set()
@@ -156,29 +156,47 @@ def parse_reaction_binning(model, percentiles):
     
     # Assign bins associated with each percentile of the read abundance distribution
     for rxn in model.reactions:
-        try:
-            test = percentiles[rxn.id]
-        except KeyError:
-            continue
+
+        # Screen lists based on user-defined reactions
+        if len(keep_rxns) > 0:
+            if rxn.id in keep_rxns:
+                include |= set([rxn.id])
+                continue
+        elif len(remove_rxns) > 0:
+            if rxn.id in remove_rxns:
+                exclude |= set([rxn.id])
+                continue
 
         # Define those reactions not considered in minimization steps
         if percentiles[rxn.id] == 0:
             include |= set([rxn.id])
+            continue
         elif percentiles[rxn.id] == 5:
             exclude |= set([rxn.id])
+            continue
 
-        # Remainder of reactions
-        elif percentiles[rxn.id] == 1:
+        # Check if reaction in partition dictionary
+        try: 
+            test = percentiles[rxn.id]
+        except KeyError:
+            include |= set([rxn.id])
+            continue
+
+        # Assess remainder of reactions
+        if percentiles[rxn.id] == 1:
             perc_top |= set([rxn.id])
+            continue
         elif percentiles[rxn.id] == 2:
             perc_hi |= set([rxn.id])
+            continue
         elif percentiles[rxn.id] == 3:
             perc_mid |= set([rxn.id])
+            continue
         elif percentiles[rxn.id] == 4:
             perc_lo |= set([rxn.id])
-
+            continue
         else:
-            include |= set([rxn.id]) # If not found, automatically include in final model
+            include |= set([rxn.id])  # If not found, automatically include in final model
 
     return include, exclude, perc_top, perc_hi, perc_mid, perc_lo
 
@@ -293,11 +311,21 @@ def prune_and_test(model, remove_rxn_ids):
 
 
 # Create context-specific model based on transcript distribution
-def contextualize(model, binning_dict, min_fraction=0.01, max_fraction=0.95, salvage=True, report=True):
+def contextualize(model, binning_dict, min_fraction=0.01, max_fraction=0.95, report=True, include_rxns=False, remove_rxns=False):
     
+    # Format user defined reactions for keeping or removal
+    if include_rxns != False:
+        user_keep_list = str(include_rxns).split('-')
+    else:
+        user_keep_list = []
+    if remove_rxns != False:
+        user_remove_list = str(remove_rxns).split('-')
+    else:
+        user_remove_list = []
+
     # Partition reactions based on transcription percentile intervals
-    ignore, exclude, perc_top, perc_hi, perc_mid, perc_lo = parse_reaction_binning(model, binning_dict)
-        
+    ignore, exclude, perc_top, perc_hi, perc_mid, perc_lo = parse_reaction_binning(model, binning_dict, user_keep_list, user_remove_list)
+    
     # Generating contextualized model
     contextualized_model = copy.deepcopy(model)
     
@@ -325,12 +353,11 @@ def contextualize(model, binning_dict, min_fraction=0.01, max_fraction=0.95, sal
     if len(exclude) > 0: contextualized_model = prune_and_test(contextualized_model, exclude)
 
     # Cross-reference all active reactions and all removed reactions and add back those where flux is sometimes parsimonious
-    if salvage == True:
-        total_active = set(list(active_top) + list(active_hi) + list(active_mid) + list(active_lo))
-        total_remove = set(list(final_remove_top) + list(final_remove_hi) + list(remove_mid) + list(remove_lo))
-        overlap_rxns = total_active.intersection(total_remove)
-        salvaged_rxns = [model.reactions.get_by_id(rxn) for rxn in overlap_rxns]
-        contextualized_model.add_reactions(salvaged_rxns)
+    total_active = set(list(active_top) + list(active_hi) + list(active_mid) + list(active_lo))
+    total_remove = set(list(final_remove_top) + list(final_remove_hi) + list(remove_mid) + list(remove_lo))
+    overlap_rxns = total_active.intersection(total_remove)
+    salvaged_rxns = [model.reactions.get_by_id(rxn) for rxn in overlap_rxns]
+    contextualized_model.add_reactions(salvaged_rxns)
 
     # Report statistics on pruning steps
     contextualized_model.id = str(contextualized_model.id) + '_riptide'
