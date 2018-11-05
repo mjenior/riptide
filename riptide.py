@@ -433,7 +433,7 @@ Included in final model:             {included}
 
 
 # Compute relative doubling time (in minutes) from objective value
-def doubling_time(model):
+def calc_doubling_time(model):
     
     with model as m:
         ov = m.slim_optimize()
@@ -442,21 +442,40 @@ def doubling_time(model):
     return growth
 
 
-# Run whole contextualization protocol mutliple times and return fastest growing model
-def growth_optimize_by_context(model, binning_dict, min_fraction=0.01, max_fraction=0.95, defined_rxns=False, iters=5):
+# Run whole contextualization protocol mutliple times and return fastest growing model, default is 15 iterations
+def growth_optimize_by_context(model, binning_dict, min_fraction=0.01, max_fraction=0.95, defined_rxns=False, iters=10):
+
+    start = time.time()
 
     curr_iter = 1
     doubling_rate = 100000000.0
+    increment = 100.0 / float(iters) 
+    progress = 0.0
+    sys.stdout.write('\rProgress: ' + str(progress) + '%')
+    sys.stdout.flush()
+
     while curr_iter <= iters:
         curr_iter += 1
         current_model = contextualize(model, binning_dict, min_fraction=min_fraction, max_fraction=max_fraction, report=False, defined_rxns=defined_rxns)
 
         # Test growth rate
-        current_rate = doubling_time(current_model)
+        current_rate = calc_doubling_time(current_model)
         if current_rate < doubling_rate:
             fast_model = copy.deepcopy(current_model)
             doubling_rate = current_rate
         else:
-            continue
+            pass
+        
+        progress += increment
+        progress = float("%.3f" % progress)
+        sys.stdout.write('\rProgress: ' + str(progress) + '%')
+        sys.stdout.flush()
+
+    sys.stdout.write('\rProgress: 100.0%      ')
+    sys.stdout.flush()
+    
+    end = time.time()
+    duration = str(round((end - start),1))
+    print('\nRIPTiDE completed ' + str(iters) + ' iterations in ' + duration + ' seconds.')
 
     return fast_model
