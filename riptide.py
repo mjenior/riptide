@@ -25,6 +25,12 @@ my_model = cobra.io.read_sbml_model('my_model.sbml')
 gene_bins = read_binning_file('gene_bins.tsv')
 reaction_bins = create_reaction_partitions(my_model, gene_bins)
 contextualized_model = contextualize(my_model, reaction_bins)
+
+Example usage 3:
+my_model = cobra.io.read_sbml_model('my_model.sbml')
+gene_bins = read_binning_file('gene_bins.tsv')
+reaction_bins = create_reaction_partitions(my_model, gene_bins)
+contextualized_model = growth_optimize_by_context(my_model, reaction_bins)
 '''
 
 # Dependencies
