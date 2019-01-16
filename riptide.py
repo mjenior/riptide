@@ -1,56 +1,51 @@
 #!/usr/bin/python
-'''
-Reaction
-Inclusion by
-Parsimonious usage,
-Transcript
-Distribution, and
-Exploration of topology
 
-or
-RIPTiDE
+# Please cite when using:
+# Jenior ML and Papin JA. (2018) RIPTiDe: Metabolic model contextualization through exploration 
+# of mutliple transcription and flux minimization levels. BioRxiv. DOI
 
-Please cite when using:
-Jenior ML and Papin JA. (2018) RIPTiDE: Metabolic model contextualization through exploration 
-of mutliple transcription and flux minimization levels. BioRxiv. DOI
-
-Example usage 1:
-my_model = cobra.io.read_sbml_model('my_model.sbml')
-transcript_abundances = read_transcription_file('reads_to_genes.tsv', replicates=True)
-reaction_bins = create_reaction_partitions(my_model, transcript_abundances)
-contextualized_model = contextualize(my_model, reaction_bins, include_rxns=rxn1-rxn2, remove_rxns=rxn3-rxn4)
-
-Example usage 2:
-my_model = cobra.io.read_sbml_model('my_model.sbml')
-gene_bins = read_binning_file('gene_bins.tsv')
-reaction_bins = create_reaction_partitions(my_model, gene_bins)
-contextualized_model = contextualize(my_model, reaction_bins)
-'''
+# Example usage:
+# my_model = cobra.io.read_sbml_model('my_model.sbml')
+# transcript_abundances = read_transcription_file('reads_to_genes.tsv', replicates=True)
+# contextualized_model = riptide(my_model, transcript_abundances, ...)
 
 # Dependencies
-import numpy
 import copy
 import time
+import numpy
 import cobra
+import pandas
+import bisect
+import symengine
+import multiprocessing
 from cobra.util import solver
 from optlang.symbolics import Zero
-from itertools import chain
-from cobra.manipulation.delete import *
 from cobra.flux_analysis.sampling import OptGPSampler
+from cobra.flux_analysis import flux_variability_analysis
 
 # Read in transcriptomic read abundances, default is tsv with no header 
-def read_transcription_file(read_abundances_file, replicates=False, header=False, sep='\t'):
+def read_transcription_file(read_abundances_file, header=False, replicates=False, sep='\t'):
+    '''Generates dictionary of transcriptomic abundances from a file.
     
+    Parameters
+    ----------
+    read_abundances_file : string
+        User-provided file name which contains gene IDs and associated transcription values
+    header : boolean
+        Defines if read abundance file has a header that needs to be ignored
+    replicates : boolean
+        Defines if read abundances contains replicates and medians require calculation
+    sep: string
+        Defines what character separates entries on each line
+    '''
     abund_dict = {}
     with open(read_abundances_file, 'r') as transcription:
-        
-        if header == True:
-            header_line = transcription.readline()
+        if header == True: header_line = transcription.readline()
 
         for line in transcription:
             line = line.split(sep)
-
             gene = str(line[0])
+            
             if replicates == True:
                 abundance = float(numpy.median([float(x) for x in line[1:]]))
             else:
@@ -61,309 +56,323 @@ def read_transcription_file(read_abundances_file, replicates=False, header=False
     return abund_dict
 
 
-# Read in user defined reactions to keep or exclude
-def read_user_defined_reactions(reaction_file):
-
-    with open(reaction_file, 'r') as reactions:
-        include_rxns = reactions.readline().split(',')
-        exclude_rxns = reactions.readline().split(',')
-
-    return include_rxns, exclude_rxns
+# Ensure that the user provided model and transcriptomic data are ready for RIPTiDe
+def initialize_model(model):
+    
+    # Create a copy of the original model and set new id
+    riptide_model = copy.deepcopy(model)
+    riptide_model.id = str(riptide_model.id) + '_riptide'
+    
+    # Check that the model can grow
+    solution = riptide_model.optimize()
+    if solution.objective_value < 1e-6 or str(solution.objective_value) == 'nan':
+        raise ValueError('ERROR: Provided model objective cannot carry flux! Please correct')
+    
+    # Calculate flux ranges and remove totally blocked reactions
+    flux_span = flux_variability_analysis(riptide_model, fraction_of_optimum=0.75)
+    flux_ranges = {}
+    blocked_rxns = []
+    for rxn_id, min_max in flux_span.iterrows():
+        if max(abs(min_max)) < 1e-6:
+            blocked_rxns.append(rxn_id)
+        else:
+            flux_ranges[rxn_id] = [min(min_max), max(min_max)]
+    for rxn in blocked_rxns: 
+        riptide_model.reactions.get_by_id(rxn).remove_from_model(remove_orphans=True)
+        
+    # Calculate original solution space volume
+    ellipsoid_vol = calculate_polytope_volume(flux_ranges)
+    
+    return riptide_model, ellipsoid_vol
 
 
 # Converts a dictionary of transcript distribution percentiles
-# Based on:
+# Loosely based on:
 # Schultz, A, & Qutub, AA (2016). Reconstruction of Tissue-Specific Metabolic Networks Using CORDA. 
 #      PLoS Computational Biology. https://doi.org/10.1371/journal.pcbi.1004808
-def create_reaction_partitions(model, transcription, save_bins_as=False, high_cutoff=90, mid_cutoff=75, low_cutoff=50, defined_rxns=False):
+def assign_coefficients(raw_transcription_dict, model):
     
-    if defined_rxns != False:
-        user_keep_list, user_remove_list = read_user_defined_reactions(defined_rxns)
-    else:
-        user_keep_list = []
-        user_remove_list = []
-        
-    # Define transcript abundance cutoffs
-    distribution = transcription.values()
-    perc_hi = numpy.percentile(distribution, high_cutoff)
-    perc_mid = numpy.percentile(distribution, mid_cutoff)
-    perc_lo = numpy.percentile(distribution, low_cutoff)
-    percentile_dict = {'cutoffs': [high_cutoff, mid_cutoff, low_cutoff]}
-    
-    # Write to file if defined by user
-    if save_bins_as != False:
-        perc_file = open(save_bins_as, 'w')
-
-    # Keep a count of genes included in each partition
-    count_4 = 0
-    count_3 = 0
-    count_2 = 0
-    count_1 = 0
-    
+    # Screen transcriptomic abundances for genes that are included in model
+    transcription_dict = {}
     for gene in model.genes:
-        
-        # If current gene not in transciptomic profile, default to lowest included group
-        failed = 0
         try:
-            test = transcription[gene.id]
+            transcription_dict[gene.id] = raw_transcription_dict[gene.id]
         except KeyError:
-            curr_percentile = 4
-            failed = 1
-            count_4 += 1
-            pass
-
-        # Assign percentile grouping scores
-        if failed == 0:
-            if transcription[gene.id] >= perc_hi:
-                curr_percentile = 1
-                count_1 += 1
-            elif transcription[gene.id] < perc_hi and transcription[gene.id] >= perc_mid:
-                curr_percentile = 2
-                count_2 += 1
-            elif transcription[gene.id] < perc_mid and transcription[gene.id] >= perc_lo:
-                curr_percentile = 3
-                count_3 += 1
-            elif transcription[gene.id] < perc_lo and transcription[gene.id] >= 0.0:
-                curr_percentile = 4
-                count_4 += 1
-
-        # Write the binning results to a file if requested by the user
-        if save_bins_as != False:
-            entry = str(gene.id) + '\t' + str(curr_percentile) + '\n'
-            perc_file.write(entry)
-
-        # Converts genes into corresponding reactions and adds them to a dictionary
-        user_defined = user_keep_list + user_remove_list
-        for rxn in list(gene.reactions): 
-            if rxn in user_defined:
-                continue
+            continue
+    
+    # Calculate transcript abundance cutoffs
+    coefficients = [1.0, 0.1, 0.01, 0.001, 0.0001]
+    percentiles = [52.0, 64.0, 76.0, 88.0]
+    distribution = transcription_dict.values()
+    abund_cutoffs = [numpy.percentile(distribution, x) for x in percentiles]
+    
+    # Screen transcript distribution by newly defined abundance intervals
+    coefficient_dict = {}
+    for gene in transcription_dict.keys():
+        transcription = transcription_dict[gene]
+        if transcription in abund_cutoffs:
+            index = abund_cutoffs.index(transcription)
+            coefficient = coefficients[index]
+        else:
+            index = bisect.bisect_right(abund_cutoffs, transcription) - 1
+            coefficient = coefficients[index]
+            
+        # Assign corresponding coefficients to reactions associated with each gene
+        for rxn in list(model.genes.get_by_any(gene)[0].reactions):
+            if rxn.id in coefficient_dict.keys():
+                coefficient_dict[rxn.id].append(coefficient)
             else:
-                percentile_dict[rxn.id] = curr_percentile
-            
-    for rxn in user_keep_list:
-        percentile_dict[rxn] = 0
-    for rxn in user_remove_list:
-        percentile_dict[rxn] = 5
-
-    if save_bins_as != False:
-        perc_file.close()
+                coefficient_dict[rxn.id] = [coefficient]
     
-    # Report sizes of each bin
-    print('Highest: ' + str(count_1))
-    print('High-Mid: ' + str(count_2))
-    print('Mid-Low: ' + str(count_3))
-    print('Lowest: ' + str(count_4))
-    
-    return percentile_dict
-       
-        
-# Bin reactions based on their percentile transcription
-def parse_reaction_partitions(model, percentiles):
-
-    included = set()
-    excluded = set()
-    perc_top = set()
-    perc_hi = set()
-    perc_mid = set()
-    perc_lo = set()
-    
-    # Assign bins associated with each percentile of the read abundance distribution
+    # Assign final coefficients
     for rxn in model.reactions:
-
-        # Check if reaction in partition dictionary
-        try: 
-            test = percentiles[rxn.id]
+        try:
+            # Take smallest value for reactions assigned multiple coefficients
+            coefficient_dict[rxn.id] = min(coefficient_dict[rxn.id])
         except KeyError:
-            included |= set([rxn.id])
-            continue
-            
-        # Define those reactions not considered in minimization steps
-        if percentiles[rxn.id] == 0:
-            included |= set([rxn.id])
-            continue
-        elif percentiles[rxn.id] == 5:
-            excluded |= set([rxn.id])
-            continue
-
-        # Assess remainder of reactions
-        if percentiles[rxn.id] == 1:
-            perc_top |= set([rxn.id])
-            continue
-        elif percentiles[rxn.id] == 2:
-            perc_hi |= set([rxn.id])
-            continue
-        elif percentiles[rxn.id] == 3:
-            perc_mid |= set([rxn.id])
-            continue
-        elif percentiles[rxn.id] == 4:
-            perc_lo |= set([rxn.id])
-            continue
-
-    return included, excluded, perc_top, perc_hi, perc_mid, perc_lo
-
-
-# Read in user-defined/editted gene priority binning file
-def read_binning_file(partition_file):
-
-    bin_dict = {}
-    with open(partition_file, 'r') as percentiles:
-        for line in percentiles:
-            line = line.split()
-            bin_dict[line[0]] = float(line[1])
-
-    return bin_dict
-
-
-# Identify active reactions in a model
-def find_active_reactions(model, sample):
-
-    active_rxns = set()
+            coefficient_dict[rxn.id] = 0.01 # central coefficient
     
-    # Use flux sampling to identify all active reactions
-    if sample == True:
-        optgp_object = OptGPSampler(iCdJ794_clinda, processes=4)
-        flux_samples = optgp_object.sample(1000)
+    return coefficient_dict
 
-        for distribution in flux_samples.iterrows():
-            for rxn in list(flux_samples.columns):
-                if abs(distribution[1][rxn]) > 1e-6:
-                    active_rxns |= set([rxn])
+
+# Read in user defined reactions to keep or exclude
+def incorporate_user_defined_reactions(remove_rxns, reaction_file):
     
-    # Use a single FBA solution to find active reactions
-    else:
-        solution = model.optimize()
-        fluxes = solution.fluxes
-        for reaction, flux in fluxes.items():
-            if abs(flux) > 1e-6:
-                active_rxns |= set([reaction])
-            
-    return active_rxns
+    print('Integrating user definitions...')
+    sep = ',' if '.csv' in str(reaction_file) else '\t'
+    
+    # Check if file actually exists    
+    try:
+        with open(reaction_file, 'r') as reactions:
+            include_rxns = set(reactions.readline().split(sep))
+            exclude_rxns = set(reactions.readline().split(sep))
+    except FileNotFoundError:
+        raise FileNotFoundError('ERROR: Defined reactions file not found! Please correct.')
+        
+    remove_rxns = remove_rxns.difference(include_rxns)
+    remove_rxns |= exclude_rxns
+
+    return remove_rxns
 
 
 # Determine those reactions that carry flux in a pFBA objective set to a threshold of maximum
 # Based on:
 # Lewis NE, et al.(2010). Omic data from evolved E. coli are consistent with computed optimal growth from
 #       genome-scale models. Molecular Systems Biology. 6, 390.
-def minimize_flux_by_percentile(model, partition_dict, adjacent, sample):
+# Holzhütter, HG. (2004). The principle of flux minimization and its application to estimate 
+#       stationary fluxes in metabolic networks. Eur. J. Biochem. 271; 2905–2922.
+def constrain_and_analyze_model(model, coefficient_dict, sampling_depth):
     
-    # Minimize flux through all reactions such that the fraction of objective optimum is still achieved
-    remove_ids = set()
-    keep_ids = set()
-    with model as m:
+    with model as constrained_model:
         
-        # Partition reactions based on transcription percentile intervals
-        included, excluded, top_ids, hi_ids, mid_ids, lo_ids = parse_reaction_partitions(model, partition_dict)
+        # Set previous objective as a constraint, allow 15% deviation
+        prev_obj_val = constrained_model.slim_optimize()
+        prev_obj_constraint = constrained_model.problem.Constraint(constrained_model.objective.expression, lb=prev_obj_val*0.85, ub=prev_obj_val)
+        constrained_model.add_cons_vars([prev_obj_constraint])
         
-        # Identify adjacent reactions to hightranscription reactions
-        if adjacent == True:
-            adj_top_ids = reduce_pruning_by_topology(model, top_ids)
-        
-        # Fix previous objective as constraint with threshold of predefined fraction of uncontexualized flux
-        solver.fix_objective_as_constraint(m, fraction=0.97)
-        
-        # Formulate pFBA objective
-        rxn_ids = set([str(rxn.id) for rxn in m.reactions])
-        other_rxn_vars = ((rxn.forward_variable, rxn.reverse_variable) for rxn in m.reactions if rxn.id in rxn_ids)
-        other_rxn_vars = chain(*other_rxn_vars)
-        top_rxn_vars = ((rxn.forward_variable, rxn.reverse_variable) for rxn in m.reactions if rxn.id in top_ids)
-        top_rxn_vars = chain(*top_rxn_vars)
-        hi_rxn_vars = ((rxn.forward_variable, rxn.reverse_variable) for rxn in m.reactions if rxn.id in hi_ids)
-        hi_rxn_vars = chain(*hi_rxn_vars)
-        mid_rxn_vars = ((rxn.forward_variable, rxn.reverse_variable) for rxn in m.reactions if rxn.id in mid_ids)
-        mid_rxn_vars = chain(*mid_rxn_vars)
-        lo_rxn_vars = ((rxn.forward_variable, rxn.reverse_variable) for rxn in m.reactions if rxn.id in lo_ids)
-        lo_rxn_vars = chain(*lo_rxn_vars)
-        
-        if adjacent == True:
-            adj_rxn_vars = ((rxn.forward_variable, rxn.reverse_variable) for rxn in m.reactions if rxn.id in adj_top_ids)
-            adj_rxn_vars = chain(*adj_rxn_vars)
-        
-        # Set new objective for minimum sum of fluxes
-        pfba_obj = m.problem.Objective(Zero, direction='min', sloppy=True)
-        m.objective = pfba_obj
-        
-        # Set linear coefficients based on if they are to be excluded from minimization
-        m.objective.set_linear_coefficients({x: 1.0 for x in other_rxn_vars})
-        m.objective.set_linear_coefficients({x: 0.0 for x in top_rxn_vars})
-        m.objective.set_linear_coefficients({x: 0.25 for x in hi_rxn_vars})
-        m.objective.set_linear_coefficients({x: 0.75 for x in mid_rxn_vars})
-        m.objective.set_linear_coefficients({x: 1.0 for x in lo_rxn_vars})
-        
-        if adjacent == True:
-            m.objective.set_linear_coefficients({x: 0.0 for x in adj_rxn_vars})
+        # Apply weigths to new expression
+        pfba_expr = Zero
+        for rxn in constrained_model.reactions:
+            pfba_expr += coefficient_dict[rxn.id] * rxn.forward_variable
+            pfba_expr += coefficient_dict[rxn.id] * rxn.reverse_variable
 
-        # Get active sections of network  
-        active_rxns = find_active_reactions(m, sample)
-        remove_ids = rxn_ids.difference(active_rxns)
-
-        # Screen reactions based on user definitions
-        remove_ids = remove_ids.difference(included)
-        remove_ids |= excluded
+        # Calculate sum of fluxes constraint
+        constrained_model.objective = constrained_model.problem.Objective(pfba_expr, direction='min', sloppy=True)
+        solution = constrained_model.optimize()
         
-    return remove_ids
-
-
-# Prune model and text that contextualized model is still able to grow
-def prune_and_test(model, remove_rxn_ids):
+        if sampling_depth == False:
+            # Determine reactions that do not carry any flux in the constrained model
+            inactive_rxns = set([rxn.id for rxn in constrained_model.reactions if abs(solution.fluxes[rxn.id]) < 1e-6])
+            return inactive_rxns
+        
+        else:
+            # Explore solution space of constrained model with flux sampling, allow 15% deviation
+            flux_sum_obj_val = solution.objective_value
+            flux_sum_constraint = constrained_model.problem.Constraint(pfba_expr, lb=flux_sum_obj_val, ub=flux_sum_obj_val*1.15)
+            constrained_model.add_cons_vars([flux_sum_constraint])
+            constrained_model.solver.update()
+            flux_object = explore_flux_ranges(constrained_model, sampling_depth)
+            return flux_object
     
-    new_model = copy.deepcopy(model)
-    
-    # Prune highlighted reactions from model, removing newly orphaned genes and metabolites
-    for rxn in remove_rxn_ids:
-        try:
-            new_model.reactions.get_by_id(rxn).remove_from_model(remove_orphans=True)
-        except:
-            pass
-    
-    # Remove residual orphaned reactions and metabolites (just in case)
-    unused_current_cpd = 1
-    unused_current_rxn = 1
-    while unused_current_cpd != 0 or unused_current_rxn != 0:
-        unused_cpd = prune_unused_metabolites(new_model)
-        unused_rxn = prune_unused_reactions(new_model)        
-        unused_current_cpd = len(unused_cpd)
-        unused_current_rxn = len(unused_rxn)
-    
-    # Check that prune model can still achieve flux through the objective (just in case)
-    if new_model.slim_optimize() < 1e-6: 
-        print('WARNING: Pruned model objective can no longer carry flux')
 
+# Prune model based on blocked reactions from minimization as well as user-defined reactions
+def prune_model(new_model, remove_rxns, defined_rxns):
+      
+    # Integrate user definitions
+    if defined_rxns != False: 
+        remove_rxns = incorporate_user_defined_reactions(remove_rxns, defined_rxns)
+        
+    # Prune highlighted reactions
+    for rxn in remove_rxns: 
+        new_model.reactions.get_by_id(rxn).remove_from_model(remove_orphans=True)
+    
+    # Prune possible residual orphans
+    removed = 1
+    while removed == 1:
+        removed = 0
+        for cpd in new_model.metabolites:
+            if len(cpd.reactions) == 0:
+                cpd.remove_from_model(); removed = 1
+        for rxn in new_model.reactions:
+            if len(rxn.metabolites) == 0: 
+                rxn.remove_from_model(); removed = 1
+    
     return new_model
 
 
-# Parse reactions to be removed and find adjacent active reactions 
-# Based on:
-# Jensen PA, et al. (2017). Antibiotics Disrupt Coordination between Transcriptional 
-#       and Phenotypic Stress Responses in Pathogenic Bacteria. Cell Reports. 20, 1705-1716.
-def reduce_pruning_by_topology(model, rxn_ids):
-
-    adjacent_rxns = set()
-    for rxn in rxn_ids:
-        rxn = model.reactions.get_by_id(rxn)
+# Analyze the possible ranges of flux in the constrained model
+def explore_flux_ranges(model, samples):
+    
+    try:
+        # Run with max number of processors
+        sampling_object = OptGPSampler(model, processes=multiprocessing.cpu_count())
+        flux_samples = sampling_object.sample(samples)        
         
-        # Parse all substrates of the current reactions
-        substrates = rxn.metabolites
-        for cpd in substrates:
+    except RuntimeError:
+        # Handle errors for models that are now too small
+        print('Constrained solution space too narrow for sampling, skipping')
+        flux_samples = 'none'
+        
+    return flux_samples
+    
 
-            # Find adjacent reactions
-            substrate_rxns = cpd.reactions
-            adjacent_rxns |= set([x.id for x in substrate_rxns]).difference(rxn_ids)
-            
-    return adjacent_rxns
+# Constrain bounds for remaining reactions in model based on RIPTiDe results
+def apply_bounds(constrained_model, flux_object):
+    
+    flux_ranges = {}
+    for rxn in constrained_model.reactions:
+        distribution = list(flux_object[rxn.id])
+        new_lb = min(distribution)
+        new_ub = max(distribution)
+        constrained_model.reactions.get_by_id(rxn.id).bounds = (new_lb, new_ub)
+        flux_ranges[rxn.id] = [new_lb, new_ub]
+
+    ellipsoid_vol = calculate_polytope_volume(flux_ranges)
+        
+    return constrained_model, ellipsoid_vol
+    
+    
+# Calculate approximate volume of solution space, tretyed as ellipsoid
+def calculate_polytope_volume(bounds):
+    
+    # Compile a list of radii from flux ranges
+    radii = []
+    for rxn in bounds.keys():
+        if bounds[rxn] == [0.0, 0.0]:
+            continue
+        else:
+            diameter = abs(bounds[rxn][0]) + abs(bounds[rxn][1])
+            radii.append(numpy.median(diameter) / 2.0)
+    
+    # Calculate volume 
+    volume = (4.0/3.0) * numpy.pi * max(radii) * numpy.median(radii) * min(radii)
+    volume = round(volume, 1)
+    
+    return volume
+
+
+# Reports how long RIPTiDe took to run
+def operation_report(start_time, model, riptide, old_vol, new_vol):
+    
+    # Pruning
+    perc_removal = 100.0 - ((float(len(riptide.reactions)) / float(len(model.reactions))) * 100.0)
+    perc_removal = round(perc_removal, 1)
+    print('\nReactions pruned to ' + str(len(riptide.reactions)) + ' from ' + str(len(model.reactions)) + ' (' + str(perc_removal) + '% reduction)')
+    perc_removal = 100.0 - ((float(len(riptide.metabolites)) / float(len(model.metabolites))) * 100.0)
+    perc_removal = round(perc_removal, 1)
+    print('Metabolites pruned to ' + str(len(riptide.metabolites)) + ' from ' + str(len(model.metabolites)) + ' (' + str(perc_removal) + '% reduction)')
+    
+    # Growth rate
+    new_ov = round(riptide.slim_optimize(), 1)
+    old_ov = round(model.slim_optimize(), 1)
+    per_shift = 100.0 - ((new_ov / old_ov) * 100.0)
+    if per_shift == 0.0:
+        print('\nNo change in flux through the objective')
+    elif per_shift > 0.0:
+        per_shift = round(abs(per_shift), 1)
+        print('\nFlux through the objective REDUCED to ' + str(new_ov) + ' from ' + str(old_ov) + ' (' + str(per_shift) + '% shift)')
+    elif per_shift < 0.0:
+        per_shift = round(abs(per_shift), 1)
+        print('\nFlux through the objective INCREASED to ' + str(new_ov) + ' from ' + str(old_ov) + ' (' + str(per_shift) + '% shift)')
+    
+    # Solution space volume
+    if new_vol != 'none':
+        vol_shift = 100.0 - ((new_vol / old_vol) * 100.0)
+        if new_vol > 100000 or old_vol > 100000:
+            pass
+        elif vol_shift < 0.0:
+            vol_shift = round(abs(vol_shift), 1)
+            print('Solution space ellipsoid volume INCREASED to ~' + str(new_vol) + ' from ~' + str(old_vol) + ' (' + str(vol_shift) + '% shift)')
+        elif vol_shift > 0.0:
+            vol_shift = round(vol_shift, 1)
+            print('Solution space ellipsoid volume DECREASED to ~' + str(new_vol) + ' from ~' + str(old_vol) + ' (' + str(vol_shift) + '% shift)')
+        else:
+            print('No change in Solution space volume')
+    
+    # Check that prune model can still achieve flux through the objective (just in case)
+    if riptide.slim_optimize() < 1e-6 or str(riptide.slim_optimize()) == 'nan':
+        print('\nWARNING: Contextualized model objective can no longer carry flux')
+    
+    # Run time
+    duration = time.time() - start_time
+    if duration < 60.0:
+        duration = round(duration)
+        print '\nRIPTiDe completed in ' + str(duration) + ' seconds'
+    elif duration < 3600.0:
+        duration = round((duration / 60.0), 1)
+        print '\nRIPTiDe completed in ' + str(duration) + ' minutes'
+    else:
+        duration = round((duration / 3600.0), 1)
+        print '\nRIPTiDe completed in ' + str(duration) + ' hours'
 
 
 # Create context-specific model based on transcript distribution
-def contextualize(model, partitions, adjacent=True, sample=False):
+def riptide(model, transcription, defined = False, samples = 10000):
+    '''Reaction Inclusion by Parsimony and Transcriptomic Distribution or RIPTiDe
     
-    # Identify reactions for pruning
-    remove_rxns = minimize_flux_by_percentile(model, partitions, adjacent, sample)
+    Creates a contextualized metabolic model based on parsimonious usage of reactions defined
+    by their associated transcriptomic abundances. Returns a pruned, context-specific cobra.Model 
+    and a pandas.DataFrame of associated flux sampling distributions
+
+    Parameters
+    ----------
+    model : cobra.Model
+        The model to be contextualized
+    transcription : dictionary
+        Dictionary of transcript abundances, output of read_transcription_file()
+    defined : False or File
+        Text file containing reactions IDs for forced inclusion listed on the first line and exclusion 
+        listed on the second line (both .csv and .tsv formats supported)
+    samples : int
+        Number of flux samples to collect, default is 10000
+    '''
+    start_time = time.time()
     
-    # Generate contextualized model
-    contextualized_model = prune_and_test(model, remove_rxns)
-    contextualized_model.id = str(contextualized_model.id) + '_riptide'
+    # Correct some possible user error
+    if samples <= 0: samples = 10000
+    else: samples = int(samples)
+    if len(set(transcription.values())) == 1:
+        raise ValueError('ERROR: All transcriptomic abundances are identical! Please correct')
+        
+    # Check original model functionality
+    # Partition reactions based on transcription percentile intervals, assign corresponding reaction coefficients
+    print('Initializing model and parsing transcriptome...')
+    riptide_model, orig_volume = initialize_model(model)
+    coefficient_dict = assign_coefficients(transcription, riptide_model)
     
-    # Report on pruning
-    print('Reactions pruned from originial model: ' + str(len(remove_rxns)))
-    print('Reactions included in contextualized model: ' + str(len(contextualized_model.reactions)))
+    # Prune now inactive network sections based on coefficients
+    print('Pruning inactivated subnetworks...')
+    remove_rxns = constrain_and_analyze_model(riptide_model, coefficient_dict, False)
+    riptide_model = prune_model(riptide_model, remove_rxns, defined)
     
-    return contextualized_model
+    # Find optimal solution space based on transcription and final constraints
+    print('Exploring context-specific solutions (longest step)...')
+    flux_object = constrain_and_analyze_model(riptide_model, coefficient_dict, samples)
+        
+    if isinstance(flux_object, pandas.DataFrame):
+        riptide_model, new_volume = apply_bounds(riptide_model, flux_object)
+        operation_report(start_time, model, riptide_model, orig_volume, new_volume)
+    else:
+        operation_report(start_time, model, riptide_model, orig_volume, 'none')
+    
+    return riptide_model, flux_object
