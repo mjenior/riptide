@@ -1,4 +1,5 @@
 README.md
+riptide.py
 setup.py
 riptide.egg-info/PKG-INFO
 riptide.egg-info/SOURCES.txt
