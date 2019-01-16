@@ -3,7 +3,7 @@
 from setuptools import setup
 
 setup(name='riptide',
-	version='0.1', 
+	version='0.2', 
 	description='Reaction Inclusion by Parsimonious usage and Transcript Distribution',
 	author='Matt Jenior',
 	author_email='mattjenior@gmail.com',
