@@ -11,6 +11,7 @@ import symengine
 import multiprocessing
 from cobra.util import solver
 from optlang.symbolics import Zero
+from cobra.manipulation.delete import remove_genes
 from cobra.flux_analysis.sampling import OptGPSampler
 from cobra.flux_analysis import flux_variability_analysis
 
@@ -41,8 +42,11 @@ def read_transcription_file(read_abundances_file, header=False, replicates=False
                 abundance = float(numpy.median([float(x) for x in line[1:]]))
             else:
                 abundance = float(line[1])
-
-            abund_dict[gene] = abundance
+            
+            if gene in abund_dict.keys():
+                abund_dict[gene] += abundance
+            else:
+                abund_dict[gene] = abundance
 
     return abund_dict
 
@@ -93,13 +97,13 @@ def assign_coefficients(raw_transcription_dict, model):
     
     # Calculate transcript abundance cutoffs
     coefficients = [1.0, 0.1, 0.01, 0.001, 0.0001]
-    percentiles = [52.0, 64.0, 76.0, 88.0]
+    percentiles = [50.0, 62.5, 75.0, 87.5]
     distribution = transcription_dict.values()
     abund_cutoffs = [numpy.percentile(distribution, x) for x in percentiles]
     
     # Screen transcript distribution by newly defined abundance intervals
     coefficient_dict = {}
-    for gene in transcription_dict.keys():
+    for gene in transcription_dict.iterkeys():
         transcription = transcription_dict[gene]
         if transcription in abund_cutoffs:
             index = abund_cutoffs.index(transcription)
@@ -109,8 +113,11 @@ def assign_coefficients(raw_transcription_dict, model):
             coefficient = coefficients[index]
             
         # Assign corresponding coefficients to reactions associated with each gene
+        gene_rxn_dict = {}
         for rxn in list(model.genes.get_by_any(gene)[0].reactions):
-            if rxn.id in coefficient_dict.keys():
+            gene_rxn_dict[rxn.id] = gene
+            
+            if rxn.id in coefficient_dict.iterkeys():
                 coefficient_dict[rxn.id].append(coefficient)
             else:
                 coefficient_dict[rxn.id] = [coefficient]
@@ -123,11 +130,11 @@ def assign_coefficients(raw_transcription_dict, model):
         except KeyError:
             coefficient_dict[rxn.id] = 0.01 # central coefficient
     
-    return coefficient_dict
+    return coefficient_dict, gene_rxn_dict
 
 
 # Read in user defined reactions to keep or exclude
-def incorporate_user_defined_reactions(remove_rxns, reaction_file):
+def incorporate_user_defined_reactions(rm_rxns, reaction_file):
     
     print('Integrating user definitions...')
     sep = ',' if '.csv' in str(reaction_file) else '\t'
@@ -140,10 +147,10 @@ def incorporate_user_defined_reactions(remove_rxns, reaction_file):
     except FileNotFoundError:
         raise FileNotFoundError('ERROR: Defined reactions file not found! Please correct.')
         
-    remove_rxns = remove_rxns.difference(include_rxns)
-    remove_rxns |= exclude_rxns
+    rm_rxns = rm_rxns.difference(include_rxns)
+    rm_rxns |= exclude_rxns
 
-    return remove_rxns
+    return rm_rxns
 
 
 # Determine those reactions that carry flux in a pFBA objective set to a threshold of maximum
@@ -156,7 +163,7 @@ def constrain_and_analyze_model(model, coefficient_dict, sampling_depth):
     
     with model as constrained_model:
         
-        # Set previous objective as a constraint, allow 15% deviation
+        # Set previous objective as a constraint, allow 25% deviation
         prev_obj_val = constrained_model.slim_optimize()
         prev_obj_constraint = constrained_model.problem.Constraint(constrained_model.objective.expression, lb=prev_obj_val*0.85, ub=prev_obj_val)
         constrained_model.add_cons_vars([prev_obj_constraint])
@@ -177,9 +184,9 @@ def constrain_and_analyze_model(model, coefficient_dict, sampling_depth):
             return inactive_rxns
         
         else:
-            # Explore solution space of constrained model with flux sampling, allow 15% deviation
+            # Explore solution space of constrained model with flux sampling, allow 25% deviation
             flux_sum_obj_val = solution.objective_value
-            flux_sum_constraint = constrained_model.problem.Constraint(pfba_expr, lb=flux_sum_obj_val, ub=flux_sum_obj_val*1.15)
+            flux_sum_constraint = constrained_model.problem.Constraint(pfba_expr, lb=flux_sum_obj_val, ub=flux_sum_obj_val*1.1)
             constrained_model.add_cons_vars([flux_sum_constraint])
             constrained_model.solver.update()
             flux_object = explore_flux_ranges(constrained_model, sampling_depth)
@@ -187,14 +194,29 @@ def constrain_and_analyze_model(model, coefficient_dict, sampling_depth):
     
 
 # Prune model based on blocked reactions from minimization as well as user-defined reactions
-def prune_model(new_model, remove_rxns, defined_rxns):
+def prune_model(new_model, rm_rxns, gene_rxn_dict, defined_rxns):
       
     # Integrate user definitions
     if defined_rxns != False: 
-        remove_rxns = incorporate_user_defined_reactions(remove_rxns, defined_rxns)
+        rm_rxns = incorporate_user_defined_reactions(rm_rxns, defined_rxns)
         
-    # Prune highlighted reactions
-    for rxn in remove_rxns: 
+    # Parse elements highlighted for pruning
+    rm_genes = []
+    nogene_rm_rxns = []
+    for rxn in rm_rxns:
+        try:
+            rm_genes.append(gene_rxn_dict[rxn])
+        except KeyError:
+            nogene_rm_rxns.append(rxn)
+            
+    # Screen for duplicates
+    rm_genes = list(set(rm_genes))
+    nogene_rm_rxns = list(set(nogene_rm_rxns))
+    
+    # Prune all reactions associated with a deactivated gene
+    remove_genes(new_model, rm_genes)
+    # Prune inactive reactions without genes
+    for rxn in nogene_rm_rxns:
         new_model.reactions.get_by_id(rxn).remove_from_model(remove_orphans=True)
     
     # Prune possible residual orphans
@@ -248,7 +270,7 @@ def calculate_polytope_volume(bounds):
     
     # Compile a list of radii from flux ranges
     radii = []
-    for rxn in bounds.keys():
+    for rxn in bounds.iterkeys():
         if bounds[rxn] == [0.0, 0.0]:
             continue
         else:
@@ -273,7 +295,7 @@ def operation_report(start_time, model, riptide, old_vol, new_vol):
     perc_removal = round(perc_removal, 1)
     print('Metabolites pruned to ' + str(len(riptide.metabolites)) + ' from ' + str(len(model.metabolites)) + ' (' + str(perc_removal) + '% reduction)')
     
-    # Growth rate
+    # Flux through objective
     new_ov = round(riptide.slim_optimize(), 1)
     old_ov = round(model.slim_optimize(), 1)
     per_shift = 100.0 - ((new_ov / old_ov) * 100.0)
@@ -349,12 +371,12 @@ def riptide(model, transcription, defined = False, samples = 10000):
     # Partition reactions based on transcription percentile intervals, assign corresponding reaction coefficients
     print('Initializing model and parsing transcriptome...')
     riptide_model, orig_volume = initialize_model(model)
-    coefficient_dict = assign_coefficients(transcription, riptide_model)
+    coefficient_dict, gene_rxn_dict = assign_coefficients(transcription, riptide_model)
     
     # Prune now inactive network sections based on coefficients
     print('Pruning inactivated subnetworks...')
-    remove_rxns = constrain_and_analyze_model(riptide_model, coefficient_dict, False)
-    riptide_model = prune_model(riptide_model, remove_rxns, defined)
+    rm_rxns = constrain_and_analyze_model(riptide_model, coefficient_dict, False)
+    riptide_model = prune_model(riptide_model, rm_rxns, gene_rxn_dict, defined)
     
     # Find optimal solution space based on transcription and final constraints
     print('Exploring context-specific solutions (longest step)...')
