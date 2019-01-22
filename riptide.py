@@ -8,11 +8,10 @@ import cobra
 import pandas
 import bisect
 import symengine
-import multiprocessing
 from cobra.util import solver
 from optlang.symbolics import Zero
 from cobra.manipulation.delete import remove_genes
-from cobra.flux_analysis.sampling import OptGPSampler
+from cobra.flux_analysis.sampling import ACHRSampler
 from cobra.flux_analysis import flux_variability_analysis
 
 # Read in transcriptomic read abundances, default is tsv with no header 
@@ -96,41 +95,51 @@ def assign_coefficients(raw_transcription_dict, model):
             continue
     
     # Calculate transcript abundance cutoffs
-    coefficients = [1.0, 0.1, 0.01, 0.001, 0.0001]
+    min_coefficients = [1.0, 0.1, 0.01, 0.001, 0.0001]
+    #max_coefficients = min_coefficients[::-1]
+    max_coefficients = [0.2, 0.4, 0.6, 0.8, 1.0]
     percentiles = [50.0, 62.5, 75.0, 87.5]
     distribution = transcription_dict.values()
     abund_cutoffs = [numpy.percentile(distribution, x) for x in percentiles]
     
     # Screen transcript distribution by newly defined abundance intervals
-    coefficient_dict = {}
+    min_coefficient_dict = {}
+    max_coefficient_dict = {}
     for gene in transcription_dict.iterkeys():
         transcription = transcription_dict[gene]
         if transcription in abund_cutoffs:
             index = abund_cutoffs.index(transcription)
-            coefficient = coefficients[index]
+            min_coefficient = min_coefficients[index]
+            max_coefficient = max_coefficients[index]
         else:
             index = bisect.bisect_right(abund_cutoffs, transcription) - 1
-            coefficient = coefficients[index]
+            min_coefficient = min_coefficients[index]
+            max_coefficient = max_coefficients[index]
             
         # Assign corresponding coefficients to reactions associated with each gene
         gene_rxn_dict = {}
         for rxn in list(model.genes.get_by_any(gene)[0].reactions):
             gene_rxn_dict[rxn.id] = gene
             
-            if rxn.id in coefficient_dict.iterkeys():
-                coefficient_dict[rxn.id].append(coefficient)
+            if rxn.id in min_coefficient_dict.keys():
+                min_coefficient_dict[rxn.id].append(min_coefficient)
+                max_coefficient_dict[rxn.id].append(max_coefficient)
             else:
-                coefficient_dict[rxn.id] = [coefficient]
+                min_coefficient_dict[rxn.id] = [min_coefficient]
+                max_coefficient_dict[rxn.id] = [max_coefficient]
     
     # Assign final coefficients
     for rxn in model.reactions:
         try:
             # Take smallest value for reactions assigned multiple coefficients
-            coefficient_dict[rxn.id] = min(coefficient_dict[rxn.id])
+            min_coefficient_dict[rxn.id] = min(min_coefficient_dict[rxn.id])
+            max_coefficient_dict[rxn.id] = max(max_coefficient_dict[rxn.id])
+        # Assign coefficients to reactions without genes
         except KeyError:
-            coefficient_dict[rxn.id] = 0.01 # central coefficient
+            min_coefficient_dict[rxn.id] = min_coefficients[2]
+            max_coefficient_dict[rxn.id] = max_coefficients[2]
     
-    return coefficient_dict, gene_rxn_dict
+    return min_coefficient_dict, max_coefficient_dict, gene_rxn_dict
 
 
 # Read in user defined reactions to keep or exclude
@@ -162,12 +171,7 @@ def incorporate_user_defined_reactions(rm_rxns, reaction_file):
 def constrain_and_analyze_model(model, coefficient_dict, sampling_depth):
     
     with model as constrained_model:
-        
-        # Set previous objective as a constraint, allow 25% deviation
-        prev_obj_val = constrained_model.slim_optimize()
-        prev_obj_constraint = constrained_model.problem.Constraint(constrained_model.objective.expression, lb=prev_obj_val*0.85, ub=prev_obj_val)
-        constrained_model.add_cons_vars([prev_obj_constraint])
-        
+
         # Apply weigths to new expression
         pfba_expr = Zero
         for rxn in constrained_model.reactions:
@@ -175,18 +179,24 @@ def constrain_and_analyze_model(model, coefficient_dict, sampling_depth):
             pfba_expr += coefficient_dict[rxn.id] * rxn.reverse_variable
 
         # Calculate sum of fluxes constraint
-        constrained_model.objective = constrained_model.problem.Objective(pfba_expr, direction='min', sloppy=True)
-        solution = constrained_model.optimize()
-        
-        if sampling_depth == False:
+        if sampling_depth == 'step_one':
+            prev_obj_val = constrained_model.slim_optimize()
+            # Set previous objective as a constraint, allow 10% deviation
+            prev_obj_constraint = constrained_model.problem.Constraint(constrained_model.objective.expression, lb=prev_obj_val*0.9, ub=prev_obj_val)
+            constrained_model.add_cons_vars([prev_obj_constraint])
+            constrained_model.objective = constrained_model.problem.Objective(pfba_expr, direction='min', sloppy=True)
+            solution = constrained_model.optimize()
+            
             # Determine reactions that do not carry any flux in the constrained model
             inactive_rxns = set([rxn.id for rxn in constrained_model.reactions if abs(solution.fluxes[rxn.id]) < 1e-6])
             return inactive_rxns
         
         else:
-            # Explore solution space of constrained model with flux sampling, allow 25% deviation
+            # Explore solution space of constrained model with flux sampling, allow 10% deviation
+            constrained_model.objective = constrained_model.problem.Objective(pfba_expr, direction='max', sloppy=True)
+            solution = constrained_model.optimize()
             flux_sum_obj_val = solution.objective_value
-            flux_sum_constraint = constrained_model.problem.Constraint(pfba_expr, lb=flux_sum_obj_val, ub=flux_sum_obj_val*1.1)
+            flux_sum_constraint = constrained_model.problem.Constraint(pfba_expr, lb=flux_sum_obj_val*0.9, ub=flux_sum_obj_val)
             constrained_model.add_cons_vars([flux_sum_constraint])
             constrained_model.solver.update()
             flux_object = explore_flux_ranges(constrained_model, sampling_depth)
@@ -237,16 +247,16 @@ def prune_model(new_model, rm_rxns, gene_rxn_dict, defined_rxns):
 def explore_flux_ranges(model, samples):
     
     try:
-        # Run with max number of processors
-        sampling_object = OptGPSampler(model, processes=multiprocessing.cpu_count())
-        flux_samples = sampling_object.sample(samples)        
-        
-    except RuntimeError:
+        sampling_object = ACHRSampler(model)
+        flux_object = sampling_object.sample(samples)        
+        analysis = 'flux_sampling'
+    except:
         # Handle errors for models that are now too small
-        print('Constrained solution space too narrow for sampling, skipping')
-        flux_samples = 'none'
+        print('Constrained solution space too narrow for sampling, performing FVA instead')        
+        flux_object = flux_variability_analysis(model, fraction_of_optimum=0.9)
+        analysis = 'fva'
         
-    return flux_samples
+    return flux_object, analysis
     
 
 # Constrain bounds for remaining reactions in model based on RIPTiDe results
@@ -340,7 +350,7 @@ def operation_report(start_time, model, riptide, old_vol, new_vol):
 
 
 # Create context-specific model based on transcript distribution
-def riptide(model, transcription, defined = False, samples = 10000):
+def riptide(model, transcription, defined = False, sampling = 10000):
     '''Reaction Inclusion by Parsimony and Transcriptomic Distribution or RIPTiDe
     
     Creates a contextualized metabolic model based on parsimonious usage of reactions defined
@@ -356,14 +366,18 @@ def riptide(model, transcription, defined = False, samples = 10000):
     defined : False or File
         Text file containing reactions IDs for forced inclusion listed on the first line and exclusion 
         listed on the second line (both .csv and .tsv formats supported)
-    samples : int
-        Number of flux samples to collect, default is 10000
+    sampling : int or False
+        Number of flux samples to collect, default is 10000, If False, sampling skipped
     '''
     start_time = time.time()
     
     # Correct some possible user error
-    if samples <= 0: samples = 10000
-    else: samples = int(samples)
+    if sampling == False:
+        pass
+    elif sampling <= 0: 
+        sampling = 10000
+    else: 
+        samples = int(sampling)
     if len(set(transcription.values())) == 1:
         raise ValueError('ERROR: All transcriptomic abundances are identical! Please correct')
         
@@ -371,21 +385,26 @@ def riptide(model, transcription, defined = False, samples = 10000):
     # Partition reactions based on transcription percentile intervals, assign corresponding reaction coefficients
     print('Initializing model and parsing transcriptome...')
     riptide_model, orig_volume = initialize_model(model)
-    coefficient_dict, gene_rxn_dict = assign_coefficients(transcription, riptide_model)
+    min_coefficient_dict, max_coefficient_dict, gene_rxn_dict = assign_coefficients(transcription, riptide_model)
     
     # Prune now inactive network sections based on coefficients
-    print('Pruning inactivated subnetworks...')
-    rm_rxns = constrain_and_analyze_model(riptide_model, coefficient_dict, False)
+    print('Pruning inactive subnetworks...')
+    rm_rxns = constrain_and_analyze_model(riptide_model, min_coefficient_dict, 'step_one')
     riptide_model = prune_model(riptide_model, rm_rxns, gene_rxn_dict, defined)
     
     # Find optimal solution space based on transcription and final constraints
-    print('Exploring context-specific solutions (longest step)...')
-    flux_object = constrain_and_analyze_model(riptide_model, coefficient_dict, samples)
+    if sampling != False:
+        print('Sampling context-specific solutions (longest step)...')
+        flux_object, analysis_type = constrain_and_analyze_model(riptide_model, max_coefficient_dict, samples)
         
-    if isinstance(flux_object, pandas.DataFrame):
-        riptide_model, new_volume = apply_bounds(riptide_model, flux_object)
-        operation_report(start_time, model, riptide_model, orig_volume, new_volume)
+        if len(flux_object.columns) > 2:
+            riptide_model, new_volume = apply_bounds(riptide_model, flux_object)
+            operation_report(start_time, model, riptide_model, orig_volume, new_volume)
+        else:
+            operation_report(start_time, model, riptide_model, orig_volume, 'none')
+    
+        return riptide_model, flux_object
+    
     else:
         operation_report(start_time, model, riptide_model, orig_volume, 'none')
-    
-    return riptide_model, flux_object
+        return riptide_model
