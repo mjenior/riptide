@@ -63,7 +63,7 @@ def initialize_model(model):
         raise ValueError('ERROR: Provided model objective cannot carry flux! Please correct')
     
     # Calculate flux ranges and remove totally blocked reactions
-    flux_span = flux_variability_analysis(riptide_model, fraction_of_optimum=0.75)
+    flux_span = flux_variability_analysis(riptide_model, fraction_of_optimum=0.1)
     flux_ranges = {}
     blocked_rxns = []
     for rxn_id, min_max in flux_span.iterrows():
@@ -185,6 +185,7 @@ def constrain_and_analyze_model(model, coefficient_dict, sampling_depth):
             prev_obj_constraint = constrained_model.problem.Constraint(constrained_model.objective.expression, lb=prev_obj_val*0.9, ub=prev_obj_val)
             constrained_model.add_cons_vars([prev_obj_constraint])
             constrained_model.objective = constrained_model.problem.Objective(pfba_expr, direction='min', sloppy=True)
+            constrained_model.solver.update()
             solution = constrained_model.optimize()
             
             # Determine reactions that do not carry any flux in the constrained model
@@ -196,9 +197,11 @@ def constrain_and_analyze_model(model, coefficient_dict, sampling_depth):
             constrained_model.objective = constrained_model.problem.Objective(pfba_expr, direction='max', sloppy=True)
             solution = constrained_model.optimize()
             flux_sum_obj_val = solution.objective_value
-            flux_sum_constraint = constrained_model.problem.Constraint(pfba_expr, lb=flux_sum_obj_val*0.9, ub=flux_sum_obj_val)
+            flux_sum_constraint = constrained_model.problem.Constraint(pfba_expr, lb=flux_sum_obj_val*0.9, ub=flux_sum_obj_val*1.1)
             constrained_model.add_cons_vars([flux_sum_constraint])
             constrained_model.solver.update()
+            
+            # Perform flux sampling (or FVA)
             flux_object = explore_flux_ranges(constrained_model, sampling_depth)
             return flux_object
     
