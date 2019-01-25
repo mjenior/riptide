@@ -84,7 +84,7 @@ def initialize_model(model):
 # Loosely based on:
 # Schultz, A, & Qutub, AA (2016). Reconstruction of Tissue-Specific Metabolic Networks Using CORDA. 
 #      PLoS Computational Biology. https://doi.org/10.1371/journal.pcbi.1004808
-def assign_coefficients(raw_transcription_dict, model):
+def assign_coefficients(raw_transcription_dict, model, percentiles, min_coefficients):
     
     # Screen transcriptomic abundances for genes that are included in model
     transcription_dict = {}
@@ -95,11 +95,7 @@ def assign_coefficients(raw_transcription_dict, model):
             continue
     
     # Calculate transcript abundance cutoffs
-    min_coefficients = [1.0, 0.5, 0.1, 0.01, 0.001]
-    #min_coefficients = [1.0, 0.1, 0.01, 0.001, 0.0001]
     max_coefficients = min_coefficients[::-1]
-    #max_coefficients = [0.2, 0.4, 0.6, 0.8, 1.0]
-    percentiles = [50.0, 62.5, 75.0, 87.5]
     distribution = transcription_dict.values()
     abund_cutoffs = [numpy.percentile(distribution, x) for x in percentiles]
     
@@ -265,16 +261,25 @@ def explore_flux_ranges(model, samples):
 
 # Constrain bounds for remaining reactions in model based on RIPTiDe results
 def apply_bounds(constrained_model, flux_object):
-    
-    # add code for fva
-    
     flux_ranges = {}
-    for rxn in constrained_model.reactions:
-        distribution = list(flux_object[rxn.id])
-        new_lb = min(distribution)
-        new_ub = max(distribution)
-        constrained_model.reactions.get_by_id(rxn.id).bounds = (new_lb, new_ub)
-        flux_ranges[rxn.id] = [new_lb, new_ub]
+    
+    # Handle FVA dataframe if necessary
+    if len(flux_object.columns) == 2:
+        for rxn in constrained_model.reactions:
+            min_max = list(flux_object.loc[rxn.id])
+            new_lb = min(min_max)
+            new_ub = max(min_max)
+            constrained_model.reactions.get_by_id(rxn.id).bounds = (new_lb, new_ub)
+            flux_ranges[rxn.id] = [new_lb, new_ub]
+    
+    # Handle flux sampling results
+    else:
+        for rxn in constrained_model.reactions:
+            distribution = list(flux_object[rxn.id])
+            new_lb = min(distribution)
+            new_ub = max(distribution)
+            constrained_model.reactions.get_by_id(rxn.id).bounds = (new_lb, new_ub)
+            flux_ranges[rxn.id] = [new_lb, new_ub]
 
     ellipsoid_vol = calculate_polytope_volume(flux_ranges)
         
@@ -356,7 +361,7 @@ def operation_report(start_time, model, riptide, old_vol, new_vol):
 
 
 # Create context-specific model based on transcript distribution
-def riptide(model, transcription, defined = False, sampling = 10000):
+def riptide(model, transcription, defined = False, sampling = 10000, percentiles = [50.0, 62.5, 75.0, 87.5], coefficients = [1.0, 0.5, 0.1, 0.01, 0.001]):
     '''Reaction Inclusion by Parsimony and Transcriptomic Distribution or RIPTiDe
     
     Creates a contextualized metabolic model based on parsimonious usage of reactions defined
@@ -374,6 +379,12 @@ def riptide(model, transcription, defined = False, sampling = 10000):
         listed on the second line (both .csv and .tsv formats supported)
     sampling : int or False
         Number of flux samples to collect, default is 10000, If False, sampling skipped
+    percentiles : list of floats
+        Percentile cutoffs of transcript abundance for linear coefficient assignments to associated reactions
+        Defaults are [50.0, 62.5, 75.0, 87.5]
+    coefficients : list of floats
+        Linear coefficients to "weight" reactions based on distribution placement
+        Defaults are [1.0, 0.5, 0.1, 0.01, 0.001]
     '''
     start_time = time.time()
     
@@ -391,7 +402,7 @@ def riptide(model, transcription, defined = False, sampling = 10000):
     # Partition reactions based on transcription percentile intervals, assign corresponding reaction coefficients
     print('Initializing model and parsing transcriptome...')
     riptide_model, orig_volume = initialize_model(model)
-    min_coefficient_dict, max_coefficient_dict, gene_rxn_dict = assign_coefficients(transcription, riptide_model)
+    min_coefficient_dict, max_coefficient_dict, gene_rxn_dict = assign_coefficients(transcription, riptide_model, percentiles, coefficients)
     
     # Prune now inactive network sections based on coefficients
     print('Pruning inactive subnetworks...')
@@ -403,12 +414,9 @@ def riptide(model, transcription, defined = False, sampling = 10000):
         print('Sampling context-specific solutions (longest step)...')
         flux_object, analysis_type = constrain_and_analyze_model(riptide_model, max_coefficient_dict, samples)
         
-        if len(flux_object.columns) > 2:
-            riptide_model, new_volume = apply_bounds(riptide_model, flux_object, 'flux_sampling')
-            operation_report(start_time, model, riptide_model, orig_volume, new_volume)
-        else:
-            operation_report(start_time, model, riptide_model, orig_volume, 'none')
-    
+        # Constrain new model
+        riptide_model, new_volume = apply_bounds(riptide_model, flux_object)
+        operation_report(start_time, model, riptide_model, orig_volume, new_volume)
         return riptide_model, flux_object
     
     else:
