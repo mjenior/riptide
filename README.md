@@ -8,9 +8,12 @@ of mutliple transcription and flux minimization levels. BioRxiv. DOI
 
 #### Dependencies
 cobrapy (>=version 0.14)
+
 symengine
 
 #### Example usage:
 my_model = cobra.io.read_sbml_model('my_model.sbml')
+
 transcript_abundances = read_transcription_file('reads_to_genes.tsv', replicates=True)
+
 contextualized_model = riptide(my_model, transcript_abundances)

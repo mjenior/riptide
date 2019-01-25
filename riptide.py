@@ -95,9 +95,10 @@ def assign_coefficients(raw_transcription_dict, model):
             continue
     
     # Calculate transcript abundance cutoffs
-    min_coefficients = [1.0, 0.1, 0.01, 0.001, 0.0001]
-    #max_coefficients = min_coefficients[::-1]
-    max_coefficients = [0.2, 0.4, 0.6, 0.8, 1.0]
+    min_coefficients = [1.0, 0.5, 0.1, 0.01, 0.001]
+    #min_coefficients = [1.0, 0.1, 0.01, 0.001, 0.0001]
+    max_coefficients = min_coefficients[::-1]
+    #max_coefficients = [0.2, 0.4, 0.6, 0.8, 1.0]
     percentiles = [50.0, 62.5, 75.0, 87.5]
     distribution = transcription_dict.values()
     abund_cutoffs = [numpy.percentile(distribution, x) for x in percentiles]
@@ -265,6 +266,8 @@ def explore_flux_ranges(model, samples):
 # Constrain bounds for remaining reactions in model based on RIPTiDe results
 def apply_bounds(constrained_model, flux_object):
     
+    # add code for fva
+    
     flux_ranges = {}
     for rxn in constrained_model.reactions:
         distribution = list(flux_object[rxn.id])
@@ -401,7 +404,7 @@ def riptide(model, transcription, defined = False, sampling = 10000):
         flux_object, analysis_type = constrain_and_analyze_model(riptide_model, max_coefficient_dict, samples)
         
         if len(flux_object.columns) > 2:
-            riptide_model, new_volume = apply_bounds(riptide_model, flux_object)
+            riptide_model, new_volume = apply_bounds(riptide_model, flux_object, 'flux_sampling')
             operation_report(start_time, model, riptide_model, orig_volume, new_volume)
         else:
             operation_report(start_time, model, riptide_model, orig_volume, 'none')
