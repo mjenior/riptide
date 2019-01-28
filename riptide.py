@@ -178,8 +178,8 @@ def constrain_and_analyze_model(model, coefficient_dict, sampling_depth):
         # Calculate sum of fluxes constraint
         if sampling_depth == 'step_one':
             prev_obj_val = constrained_model.slim_optimize()
-            # Set previous objective as a constraint, allow 10% deviation
-            prev_obj_constraint = constrained_model.problem.Constraint(constrained_model.objective.expression, lb=prev_obj_val*0.9, ub=prev_obj_val)
+            # Set previous objective as a constraint, allow 25% deviation
+            prev_obj_constraint = constrained_model.problem.Constraint(constrained_model.objective.expression, lb=prev_obj_val*0.75, ub=prev_obj_val)
             constrained_model.add_cons_vars([prev_obj_constraint])
             constrained_model.objective = constrained_model.problem.Objective(pfba_expr, direction='min', sloppy=True)
             constrained_model.solver.update()
@@ -190,11 +190,11 @@ def constrain_and_analyze_model(model, coefficient_dict, sampling_depth):
             return inactive_rxns
         
         else:
-            # Explore solution space of constrained model with flux sampling, allow 10% deviation
+            # Explore solution space of constrained model with flux sampling, allow 30% deviation
             constrained_model.objective = constrained_model.problem.Objective(pfba_expr, direction='max', sloppy=True)
             solution = constrained_model.optimize()
             flux_sum_obj_val = solution.objective_value
-            flux_sum_constraint = constrained_model.problem.Constraint(pfba_expr, lb=flux_sum_obj_val*0.9, ub=flux_sum_obj_val*1.1)
+            flux_sum_constraint = constrained_model.problem.Constraint(pfba_expr, lb=flux_sum_obj_val*0.85, ub=flux_sum_obj_val*1.15)
             constrained_model.add_cons_vars([flux_sum_constraint])
             constrained_model.solver.update()
             
@@ -300,7 +300,7 @@ def calculate_polytope_volume(bounds):
     
     # Calculate volume 
     volume = (4.0/3.0) * numpy.pi * max(radii) * numpy.median(radii) * min(radii)
-    volume = round(volume, 1)
+    volume = round(volume, 3)
     
     return volume
 
@@ -317,16 +317,16 @@ def operation_report(start_time, model, riptide, old_vol, new_vol):
     print('Metabolites pruned to ' + str(len(riptide.metabolites)) + ' from ' + str(len(model.metabolites)) + ' (' + str(perc_removal) + '% reduction)')
     
     # Flux through objective
-    new_ov = round(riptide.slim_optimize(), 1)
-    old_ov = round(model.slim_optimize(), 1)
+    new_ov = round(riptide.slim_optimize(), 3)
+    old_ov = round(model.slim_optimize(), 3)
     per_shift = 100.0 - ((new_ov / old_ov) * 100.0)
     if per_shift == 0.0:
         print('\nNo change in flux through the objective')
     elif per_shift > 0.0:
-        per_shift = round(abs(per_shift), 1)
+        per_shift = round(abs(per_shift), 2)
         print('\nFlux through the objective REDUCED to ' + str(new_ov) + ' from ' + str(old_ov) + ' (' + str(per_shift) + '% shift)')
     elif per_shift < 0.0:
-        per_shift = round(abs(per_shift), 1)
+        per_shift = round(abs(per_shift), 2)
         print('\nFlux through the objective INCREASED to ' + str(new_ov) + ' from ' + str(old_ov) + ' (' + str(per_shift) + '% shift)')
     
     # Solution space volume
@@ -335,10 +335,10 @@ def operation_report(start_time, model, riptide, old_vol, new_vol):
         if new_vol > 100000 or old_vol > 100000:
             pass
         elif vol_shift < 0.0:
-            vol_shift = round(abs(vol_shift), 1)
+            vol_shift = round(abs(vol_shift), 2)
             print('Solution space ellipsoid volume INCREASED to ~' + str(new_vol) + ' from ~' + str(old_vol) + ' (' + str(vol_shift) + '% shift)')
         elif vol_shift > 0.0:
-            vol_shift = round(vol_shift, 1)
+            vol_shift = round(vol_shift, 2)
             print('Solution space ellipsoid volume DECREASED to ~' + str(new_vol) + ' from ~' + str(old_vol) + ' (' + str(vol_shift) + '% shift)')
         else:
             print('No change in Solution space volume')
@@ -381,10 +381,10 @@ def riptide(model, transcription, defined = False, sampling = 10000, percentiles
         Number of flux samples to collect, default is 10000, If False, sampling skipped
     percentiles : list of floats
         Percentile cutoffs of transcript abundance for linear coefficient assignments to associated reactions
-        Defaults are [50.0, 62.5, 75.0, 87.5]
+        Default is [50.0, 62.5, 75.0, 87.5]
     coefficients : list of floats
         Linear coefficients to "weight" reactions based on distribution placement
-        Defaults are [1.0, 0.5, 0.1, 0.01, 0.001]
+        Default is [1.0, 0.5, 0.1, 0.01, 0.001]
     '''
     start_time = time.time()
     
@@ -397,7 +397,9 @@ def riptide(model, transcription, defined = False, sampling = 10000, percentiles
         samples = int(sampling)
     if len(set(transcription.values())) == 1:
         raise ValueError('ERROR: All transcriptomic abundances are identical! Please correct')
-        
+    if len(coefficients) != len(percentiles) + 1:
+        raise ValueError('ERROR: Invalid ratio of percentile cutoffs to linear coefficients! Please correct')
+    
     # Check original model functionality
     # Partition reactions based on transcription percentile intervals, assign corresponding reaction coefficients
     print('Initializing model and parsing transcriptome...')
@@ -405,13 +407,13 @@ def riptide(model, transcription, defined = False, sampling = 10000, percentiles
     min_coefficient_dict, max_coefficient_dict, gene_rxn_dict = assign_coefficients(transcription, riptide_model, percentiles, coefficients)
     
     # Prune now inactive network sections based on coefficients
-    print('Pruning inactive subnetworks...')
+    print('Pruning zero flux subnetworks...')
     rm_rxns = constrain_and_analyze_model(riptide_model, min_coefficient_dict, 'step_one')
     riptide_model = prune_model(riptide_model, rm_rxns, gene_rxn_dict, defined)
     
     # Find optimal solution space based on transcription and final constraints
     if sampling != False:
-        print('Sampling context-specific solutions (longest step)...')
+        print('Sampling context-specific solution space (longest step)...')
         flux_object, analysis_type = constrain_and_analyze_model(riptide_model, max_coefficient_dict, samples)
         
         # Constrain new model
