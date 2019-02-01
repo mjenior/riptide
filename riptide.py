@@ -165,7 +165,7 @@ def incorporate_user_defined_reactions(rm_rxns, reaction_file):
 #       genome-scale models. Molecular Systems Biology. 6, 390.
 # Holzhütter, HG. (2004). The principle of flux minimization and its application to estimate 
 #       stationary fluxes in metabolic networks. Eur. J. Biochem. 271; 2905–2922.
-def constrain_and_analyze_model(model, coefficient_dict, sampling_depth):
+def constrain_and_analyze_model(model, coefficient_dict, fraction, sampling_depth):
     
     with model as constrained_model:
 
@@ -174,12 +174,18 @@ def constrain_and_analyze_model(model, coefficient_dict, sampling_depth):
         for rxn in constrained_model.reactions:
             pfba_expr += coefficient_dict[rxn.id] * rxn.forward_variable
             pfba_expr += coefficient_dict[rxn.id] * rxn.reverse_variable
-
+        
+        # Calculate fractions of optimum used in each step
+        fraction_1 = 1.0 - fraction
+        half_fraction = fraction / 2.0
+        fraction_2 = 1.0 - half_fraction
+        fraction_3 = 1.0 + half_fraction
+        
         # Calculate sum of fluxes constraint
         if sampling_depth == 'step_one':
             prev_obj_val = constrained_model.slim_optimize()
-            # Set previous objective as a constraint, allow 25% deviation
-            prev_obj_constraint = constrained_model.problem.Constraint(constrained_model.objective.expression, lb=prev_obj_val*0.75, ub=prev_obj_val)
+            # Set previous objective as a constraint, allow deviation
+            prev_obj_constraint = constrained_model.problem.Constraint(constrained_model.objective.expression, lb=prev_obj_val*fraction_1, ub=prev_obj_val)
             constrained_model.add_cons_vars([prev_obj_constraint])
             constrained_model.objective = constrained_model.problem.Objective(pfba_expr, direction='min', sloppy=True)
             constrained_model.solver.update()
@@ -190,11 +196,11 @@ def constrain_and_analyze_model(model, coefficient_dict, sampling_depth):
             return inactive_rxns
         
         else:
-            # Explore solution space of constrained model with flux sampling, allow 30% deviation
+            # Explore solution space of constrained model with flux sampling, allow deviation
             constrained_model.objective = constrained_model.problem.Objective(pfba_expr, direction='max', sloppy=True)
             solution = constrained_model.optimize()
             flux_sum_obj_val = solution.objective_value
-            flux_sum_constraint = constrained_model.problem.Constraint(pfba_expr, lb=flux_sum_obj_val*0.85, ub=flux_sum_obj_val*1.15)
+            flux_sum_constraint = constrained_model.problem.Constraint(pfba_expr, lb=flux_sum_obj_val*fraction_2, ub=flux_sum_obj_val*fraction_3)
             constrained_model.add_cons_vars([flux_sum_constraint])
             constrained_model.solver.update()
             
@@ -361,7 +367,7 @@ def operation_report(start_time, model, riptide, old_vol, new_vol):
 
 
 # Create context-specific model based on transcript distribution
-def riptide(model, transcription, defined = False, sampling = 10000, percentiles = [50.0, 62.5, 75.0, 87.5], coefficients = [1.0, 0.5, 0.1, 0.01, 0.001]):
+def riptide(model, transcription, defined = False, sampling = 10000, percentiles = [50.0, 62.5, 75.0, 87.5], coefficients = [1.0, 0.5, 0.1, 0.01, 0.001], fraction = 0.2):
     '''Reaction Inclusion by Parsimony and Transcriptomic Distribution or RIPTiDe
     
     Creates a contextualized metabolic model based on parsimonious usage of reactions defined
@@ -381,10 +387,13 @@ def riptide(model, transcription, defined = False, sampling = 10000, percentiles
         Number of flux samples to collect, default is 10000, If False, sampling skipped
     percentiles : list of floats
         Percentile cutoffs of transcript abundance for linear coefficient assignments to associated reactions
-        Default is [50.0, 62.5, 75.0, 87.5]
+        Defaults are [50.0, 62.5, 75.0, 87.5]
     coefficients : list of floats
         Linear coefficients to "weight" reactions based on distribution placement
-        Default is [1.0, 0.5, 0.1, 0.01, 0.001]
+        Defaults are [1.0, 0.5, 0.1, 0.01, 0.001]
+    fraction : float
+        Percent allowed deviation from optimal objective value during FBA steps
+        Default is 0.2
     '''
     start_time = time.time()
     
@@ -399,6 +408,9 @@ def riptide(model, transcription, defined = False, sampling = 10000, percentiles
         raise ValueError('ERROR: All transcriptomic abundances are identical! Please correct')
     if len(coefficients) != len(percentiles) + 1:
         raise ValueError('ERROR: Invalid ratio of percentile cutoffs to linear coefficients! Please correct')
+    fraction = float(fraction)
+    if fraction <= 0.0:
+        fraction = 0.2
     
     # Check original model functionality
     # Partition reactions based on transcription percentile intervals, assign corresponding reaction coefficients
@@ -408,13 +420,13 @@ def riptide(model, transcription, defined = False, sampling = 10000, percentiles
     
     # Prune now inactive network sections based on coefficients
     print('Pruning zero flux subnetworks...')
-    rm_rxns = constrain_and_analyze_model(riptide_model, min_coefficient_dict, 'step_one')
+    rm_rxns = constrain_and_analyze_model(riptide_model, min_coefficient_dict, fraction, 'step_one')
     riptide_model = prune_model(riptide_model, rm_rxns, gene_rxn_dict, defined)
     
     # Find optimal solution space based on transcription and final constraints
     if sampling != False:
         print('Sampling context-specific solution space (longest step)...')
-        flux_object, analysis_type = constrain_and_analyze_model(riptide_model, max_coefficient_dict, samples)
+        flux_object, analysis_type = constrain_and_analyze_model(riptide_model, max_coefficient_dict, fraction, samples)
         
         # Constrain new model
         riptide_model, new_volume = apply_bounds(riptide_model, flux_object)
