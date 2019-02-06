@@ -16,4 +16,4 @@ my_model = cobra.io.read_sbml_model('my_model.sbml')
 
 transcript_abundances = read_transcription_file('reads_to_genes.tsv', replicates=True)
 
-contextualized_model = riptide(my_model, transcript_abundances)
+contextualized_model, flux_samples = riptide(my_model, transcript_abundances)
