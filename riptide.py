@@ -367,7 +367,7 @@ def operation_report(start_time, model, riptide, old_vol, new_vol):
 
 
 # Create context-specific model based on transcript distribution
-def riptide(model, transcription, defined = False, sampling = 10000, percentiles = [50.0, 62.5, 75.0, 87.5], coefficients = [1.0, 0.5, 0.1, 0.01, 0.001], fraction = 0.2):
+def riptide(model, transcription, defined = False, sampling = 10000, percentiles = [50.0, 62.5, 75.0, 87.5], coefficients = [1.0, 0.5, 0.1, 0.01, 0.001], fraction = 0.8):
     '''Reaction Inclusion by Parsimony and Transcriptomic Distribution or RIPTiDe
     
     Creates a contextualized metabolic model based on parsimonious usage of reactions defined
@@ -389,11 +389,11 @@ def riptide(model, transcription, defined = False, sampling = 10000, percentiles
         Percentile cutoffs of transcript abundance for linear coefficient assignments to associated reactions
         Defaults are [50.0, 62.5, 75.0, 87.5]
     coefficients : list of floats
-        Linear coefficients to "weight" reactions based on distribution placement
+        Linear coefficients to weight reactions based on distribution placement
         Defaults are [1.0, 0.5, 0.1, 0.01, 0.001]
     fraction : float
-        Percent allowed deviation from optimal objective value during FBA steps
-        Default is 0.2
+        Minimum percent of optimal objective value during FBA steps
+        Default is 0.8
     '''
     start_time = time.time()
     
@@ -410,7 +410,8 @@ def riptide(model, transcription, defined = False, sampling = 10000, percentiles
         raise ValueError('ERROR: Invalid ratio of percentile cutoffs to linear coefficients! Please correct')
     fraction = float(fraction)
     if fraction <= 0.0:
-        fraction = 0.2
+        fraction = 0.8
+    fraction = 1.0 - fraction
     
     # Check original model functionality
     # Partition reactions based on transcription percentile intervals, assign corresponding reaction coefficients
