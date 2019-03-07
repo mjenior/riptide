@@ -49,7 +49,7 @@ def read_transcription_file(read_abundances_file, header=False, replicates=False
 
     return abund_dict
 
-
+        
 # Ensure that the user provided model and transcriptomic data are ready for RIPTiDe
 def initialize_model(model):
     
@@ -76,7 +76,7 @@ def initialize_model(model):
         
     # Calculate original solution space volume
     ellipsoid_vol = calculate_polytope_volume(flux_ranges)
-    
+
     return riptide_model, ellipsoid_vol
 
 
@@ -95,48 +95,41 @@ def assign_coefficients(raw_transcription_dict, model, percentiles, min_coeffici
             continue
     
     # Calculate transcript abundance cutoffs
-    max_coefficients = min_coefficients[::-1]
     distribution = transcription_dict.values()
     abund_cutoffs = [numpy.percentile(distribution, x) for x in percentiles]
     
     # Screen transcript distribution by newly defined abundance intervals
-    min_coefficient_dict = {}
-    max_coefficient_dict = {}
+    coefficient_dict = {}
     for gene in transcription_dict.iterkeys():
         transcription = transcription_dict[gene]
         if transcription in abund_cutoffs:
             index = abund_cutoffs.index(transcription)
             min_coefficient = min_coefficients[index]
-            max_coefficient = max_coefficients[index]
         else:
             index = bisect.bisect_right(abund_cutoffs, transcription) - 1
             min_coefficient = min_coefficients[index]
-            max_coefficient = max_coefficients[index]
-            
+                    
         # Assign corresponding coefficients to reactions associated with each gene
         gene_rxn_dict = {}
         for rxn in list(model.genes.get_by_any(gene)[0].reactions):
             gene_rxn_dict[rxn.id] = gene
             
-            if rxn.id in min_coefficient_dict.keys():
-                min_coefficient_dict[rxn.id].append(min_coefficient)
-                max_coefficient_dict[rxn.id].append(max_coefficient)
+            if rxn.id in coefficient_dict.keys():
+                coefficient_dict[rxn.id].append(min_coefficient)
             else:
-                min_coefficient_dict[rxn.id] = [min_coefficient]
-                max_coefficient_dict[rxn.id] = [max_coefficient]
+                coefficient_dict[rxn.id] = [min_coefficient]
     
     # Assign final coefficients
+    nogene_coefficient = numpy.median(min_coefficients)
     for rxn in model.reactions:
         try:
             # Take smallest value for reactions assigned multiple coefficients
-            min_coefficient_dict[rxn.id] = min(min_coefficient_dict[rxn.id])
-            max_coefficient_dict[rxn.id] = max(max_coefficient_dict[rxn.id])
-        # Assign coefficients to reactions without genes
+            coefficient_dict[rxn.id] = min(coefficient_dict[rxn.id])
         except KeyError:
-            min_coefficient_dict[rxn.id] = min_coefficients[2]
-            max_coefficient_dict[rxn.id] = max_coefficients[2]
+            coefficient_dict[rxn.id] = nogene_coefficient
+            continue
     
-    return min_coefficient_dict, max_coefficient_dict, gene_rxn_dict
+    return coefficient_dict, gene_rxn_dict
 
 
 # Read in user defined reactions to keep or exclude
@@ -171,21 +164,22 @@ def constrain_and_analyze_model(model, coefficient_dict, fraction, sampling_dept
 
         # Apply weigths to new expression
         pfba_expr = Zero
-        for rxn in constrained_model.reactions:
-            pfba_expr += coefficient_dict[rxn.id] * rxn.forward_variable
-            pfba_expr += coefficient_dict[rxn.id] * rxn.reverse_variable
-        
-        # Calculate fractions of optimum used in each step
-        fraction_1 = 1.0 - fraction
-        half_fraction = fraction / 2.0
-        fraction_2 = 1.0 - half_fraction
-        fraction_3 = 1.0 + half_fraction
-        
+        if sampling_depth == 'minimization':
+            for rxn in constrained_model.reactions:
+                pfba_expr += coefficient_dict[rxn.id] * rxn.forward_variable
+                pfba_expr += coefficient_dict[rxn.id] * rxn.reverse_variable
+        else:
+            coeff_range = float(max(coefficient_dict.values())) + float(min(coefficient_dict.values()))
+            for rxn in constrained_model.reactions:
+                max_coeff = coeff_range - float(coefficient_dict[rxn.id])
+                pfba_expr += max_coeff * rxn.forward_variable
+                pfba_expr += max_coeff * rxn.reverse_variable
+                
         # Calculate sum of fluxes constraint
-        if sampling_depth == 'step_one':
+        if sampling_depth == 'minimization':
             prev_obj_val = constrained_model.slim_optimize()
             # Set previous objective as a constraint, allow deviation
-            prev_obj_constraint = constrained_model.problem.Constraint(constrained_model.objective.expression, lb=prev_obj_val*fraction_1, ub=prev_obj_val)
+            prev_obj_constraint = constrained_model.problem.Constraint(constrained_model.objective.expression, lb=prev_obj_val*fraction, ub=prev_obj_val)
             constrained_model.add_cons_vars([prev_obj_constraint])
             constrained_model.objective = constrained_model.problem.Objective(pfba_expr, direction='min', sloppy=True)
             constrained_model.solver.update()
@@ -196,11 +190,14 @@ def constrain_and_analyze_model(model, coefficient_dict, fraction, sampling_dept
             return inactive_rxns
         
         else:
+            # Calculate upper fraction of optimum 
+            fraction_hi = 1.0 + (1.0 - fraction)
+        
             # Explore solution space of constrained model with flux sampling, allow deviation
             constrained_model.objective = constrained_model.problem.Objective(pfba_expr, direction='max', sloppy=True)
             solution = constrained_model.optimize()
             flux_sum_obj_val = solution.objective_value
-            flux_sum_constraint = constrained_model.problem.Constraint(pfba_expr, lb=flux_sum_obj_val*fraction_2, ub=flux_sum_obj_val*fraction_3)
+            flux_sum_constraint = constrained_model.problem.Constraint(pfba_expr, lb=flux_sum_obj_val*fraction, ub=flux_sum_obj_val*fraction_hi)
             constrained_model.add_cons_vars([flux_sum_constraint])
             constrained_model.solver.update()
             
@@ -411,23 +408,24 @@ def riptide(model, transcription, defined = False, sampling = 10000, percentiles
     fraction = float(fraction)
     if fraction <= 0.0:
         fraction = 0.8
-    fraction = 1.0 - fraction
-    
+    percentiles.sort() # sort ascending
+    coefficients.sort(reverse=True) # sort descending
+        
     # Check original model functionality
     # Partition reactions based on transcription percentile intervals, assign corresponding reaction coefficients
     print('Initializing model and parsing transcriptome...')
     riptide_model, orig_volume = initialize_model(model)
-    min_coefficient_dict, max_coefficient_dict, gene_rxn_dict = assign_coefficients(transcription, riptide_model, percentiles, coefficients)
+    coefficient_dict, gene_rxn_dict = assign_coefficients(transcription, riptide_model, percentiles, coefficients)
     
     # Prune now inactive network sections based on coefficients
     print('Pruning zero flux subnetworks...')
-    rm_rxns = constrain_and_analyze_model(riptide_model, min_coefficient_dict, fraction, 'step_one')
+    rm_rxns = constrain_and_analyze_model(riptide_model, coefficient_dict, fraction, 'minimization')
     riptide_model = prune_model(riptide_model, rm_rxns, gene_rxn_dict, defined)
     
     # Find optimal solution space based on transcription and final constraints
     if sampling != False:
         print('Sampling context-specific solution space (longest step)...')
-        flux_object, analysis_type = constrain_and_analyze_model(riptide_model, max_coefficient_dict, fraction, samples)
+        flux_object, analysis_type = constrain_and_analyze_model(riptide_model, coefficient_dict, fraction, samples)
         
         # Constrain new model
         riptide_model, new_volume = apply_bounds(riptide_model, flux_object)
