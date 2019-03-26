@@ -110,10 +110,7 @@ def assign_coefficients(raw_transcription_dict, model, percentiles, min_coeffici
             min_coefficient = min_coefficients[index]
                     
         # Assign corresponding coefficients to reactions associated with each gene
-        gene_rxn_dict = {}
-        for rxn in list(model.genes.get_by_any(gene)[0].reactions):
-            gene_rxn_dict[rxn.id] = gene
-            
+        for rxn in list(model.genes.get_by_any(gene)[0].reactions):            
             if rxn.id in coefficient_dict.keys():
                 coefficient_dict[rxn.id].append(min_coefficient)
             else:
@@ -129,7 +126,7 @@ def assign_coefficients(raw_transcription_dict, model, percentiles, min_coeffici
             coefficient_dict[rxn.id] = nogene_coefficient
             continue
     
-    return coefficient_dict, gene_rxn_dict
+    return coefficient_dict
 
 
 # Read in user defined reactions to keep or exclude
@@ -207,29 +204,31 @@ def constrain_and_analyze_model(model, coefficient_dict, fraction, sampling_dept
     
 
 # Prune model based on blocked reactions from minimization as well as user-defined reactions
-def prune_model(new_model, rm_rxns, gene_rxn_dict, defined_rxns):
+def prune_model(new_model, rm_rxns, defined_rxns):
       
     # Integrate user definitions
     if defined_rxns != False: 
         rm_rxns = incorporate_user_defined_reactions(rm_rxns, defined_rxns)
         
-    # Parse elements highlighted for pruning
-    rm_genes = []
-    nogene_rm_rxns = []
+    # Parse elements highlighted for pruning based on GPRs
+    final_rm_rxns = []
     for rxn in rm_rxns:
-        try:
-            rm_genes.append(gene_rxn_dict[rxn])
-        except KeyError:
-            nogene_rm_rxns.append(rxn)
+        test = 'pass'
+        current_genes = list(new_model.reactions.get_by_id(rxn).genes)
+        for gene in current_genes:
+            for rxn_sub in gene.reactions:
+                if rxn_sub.id not in rm_rxns:
+                    test = 'fail'
+                else:
+                    pass
             
+        if test == 'pass': final_rm_rxns.append(rxn)
+                        
     # Screen for duplicates
-    rm_genes = list(set(rm_genes))
-    nogene_rm_rxns = list(set(nogene_rm_rxns))
+    final_rm_rxns = list(set(final_rm_rxns))
     
-    # Prune all reactions associated with a deactivated gene
-    remove_genes(new_model, rm_genes)
-    # Prune inactive reactions without genes
-    for rxn in nogene_rm_rxns:
+    # Prune inactive reactions
+    for rxn in final_rm_rxns:
         new_model.reactions.get_by_id(rxn).remove_from_model(remove_orphans=True)
     
     # Prune possible residual orphans
@@ -415,12 +414,12 @@ def riptide(model, transcription, defined = False, sampling = 10000, percentiles
     # Partition reactions based on transcription percentile intervals, assign corresponding reaction coefficients
     print('Initializing model and parsing transcriptome...')
     riptide_model, orig_volume = initialize_model(model)
-    coefficient_dict, gene_rxn_dict = assign_coefficients(transcription, riptide_model, percentiles, coefficients)
+    coefficient_dict = assign_coefficients(transcription, riptide_model, percentiles, coefficients)
     
     # Prune now inactive network sections based on coefficients
     print('Pruning zero flux subnetworks...')
     rm_rxns = constrain_and_analyze_model(riptide_model, coefficient_dict, fraction, 'minimization')
-    riptide_model = prune_model(riptide_model, rm_rxns, gene_rxn_dict, defined)
+    riptide_model = prune_model(riptide_model, rm_rxns, defined)
     
     # Find optimal solution space based on transcription and final constraints
     if sampling != False:
