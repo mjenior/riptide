@@ -366,7 +366,7 @@ def operation_report(start_time, model, riptide, old_vol, new_vol):
 
 
 # Create context-specific model based on transcript distribution
-def riptide(model, transcription, defined = False, sampling = 10000, percentiles = [50.0, 62.5, 75.0, 87.5], coefficients = [1.0, 0.5, 0.1, 0.01, 0.001], fraction = 0.8, conservative = 'y'):
+def riptide(model, transcription, defined = False, sampling = 10000, percentiles = [50.0, 62.5, 75.0, 87.5], coefficients = [1.0, 0.5, 0.1, 0.01, 0.001], fraction = 0.8, conservative = 'n'):
     '''Reaction Inclusion by Parsimony and Transcriptomic Distribution or RIPTiDe
     
     Creates a contextualized metabolic model based on parsimonious usage of reactions defined
@@ -395,7 +395,7 @@ def riptide(model, transcription, defined = False, sampling = 10000, percentiles
         Default is 0.8
     conservative : str
     	Conservatively remove inactive reactions based on GPR rules
-    	Either 'y' or 'n', default in 'y' (yes)
+    	Either 'y' or 'n', default in 'n' (no)
     '''
     start_time = time.time()
     
