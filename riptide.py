@@ -204,25 +204,28 @@ def constrain_and_analyze_model(model, coefficient_dict, fraction, sampling_dept
     
 
 # Prune model based on blocked reactions from minimization as well as user-defined reactions
-def prune_model(new_model, rm_rxns, defined_rxns):
+def prune_model(new_model, rm_rxns, defined_rxns, conserve):
       
     # Integrate user definitions
     if defined_rxns != False: 
         rm_rxns = incorporate_user_defined_reactions(rm_rxns, defined_rxns)
         
     # Parse elements highlighted for pruning based on GPRs
-    final_rm_rxns = []
-    for rxn in rm_rxns:
-        test = 'pass'
-        current_genes = list(new_model.reactions.get_by_id(rxn).genes)
-        for gene in current_genes:
-            for rxn_sub in gene.reactions:
-                if rxn_sub.id not in rm_rxns:
+    if conserve == 'y':
+    	final_rm_rxns = []
+    	for rxn in rm_rxns:
+        	test = 'pass'
+        	current_genes = list(new_model.reactions.get_by_id(rxn).genes)
+        	for gene in current_genes:
+            	for rxn_sub in gene.reactions:
+                	if rxn_sub.id not in rm_rxns:
                     test = 'fail'
-                else:
-                    pass
+                	else:
+                    	pass
             
-        if test == 'pass': final_rm_rxns.append(rxn)
+        	if test == 'pass': final_rm_rxns.append(rxn)
+    else:
+    	final_rm_rxns = rm_rxns
                         
     # Screen for duplicates
     final_rm_rxns = list(set(final_rm_rxns))
@@ -363,7 +366,7 @@ def operation_report(start_time, model, riptide, old_vol, new_vol):
 
 
 # Create context-specific model based on transcript distribution
-def riptide(model, transcription, defined = False, sampling = 10000, percentiles = [50.0, 62.5, 75.0, 87.5], coefficients = [1.0, 0.5, 0.1, 0.01, 0.001], fraction = 0.8):
+def riptide(model, transcription, defined = False, sampling = 10000, percentiles = [50.0, 62.5, 75.0, 87.5], coefficients = [1.0, 0.5, 0.1, 0.01, 0.001], fraction = 0.8, conservative = 'y'):
     '''Reaction Inclusion by Parsimony and Transcriptomic Distribution or RIPTiDe
     
     Creates a contextualized metabolic model based on parsimonious usage of reactions defined
@@ -390,6 +393,9 @@ def riptide(model, transcription, defined = False, sampling = 10000, percentiles
     fraction : float
         Minimum percent of optimal objective value during FBA steps
         Default is 0.8
+    conservative : str
+    	Conservatively remove inactive reactions based on GPR rules
+    	Either 'y' or 'n', default in 'y' (yes)
     '''
     start_time = time.time()
     
@@ -409,7 +415,8 @@ def riptide(model, transcription, defined = False, sampling = 10000, percentiles
         fraction = 0.8
     percentiles.sort() # sort ascending
     coefficients.sort(reverse=True) # sort descending
-        
+    if conservative not in ['y','n']: conservative = 'y'
+
     # Check original model functionality
     # Partition reactions based on transcription percentile intervals, assign corresponding reaction coefficients
     print('Initializing model and parsing transcriptome...')
@@ -419,7 +426,7 @@ def riptide(model, transcription, defined = False, sampling = 10000, percentiles
     # Prune now inactive network sections based on coefficients
     print('Pruning zero flux subnetworks...')
     rm_rxns = constrain_and_analyze_model(riptide_model, coefficient_dict, fraction, 'minimization')
-    riptide_model = prune_model(riptide_model, rm_rxns, defined)
+    riptide_model = prune_model(riptide_model, rm_rxns, defined, conservative)
     
     # Find optimal solution space based on transcription and final constraints
     if sampling != False:
