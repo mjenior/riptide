@@ -2,13 +2,13 @@
 
 from distutils.core import setup
 
-setup(name='RIPTiDe',
-	version='0.3', 
-	description='Reaction Inclusion by Parsimonious usage and Transcript Distribution',
+setup(name='riptide',
+	version='0.8', 
+	description='Reaction Inclusion by Parsimony and Transcript Distribution (RIPTiDe)',
 	author='Matt Jenior',
 	author_email='mattjenior@gmail.com',
 	url='https://github.com/mjenior/riptide',
 	packages=['riptide'],
-    license='MIT License',
+    license='MIT',
     long_description=open('README.txt').read()
 	)

@@ -81,9 +81,6 @@ def initialize_model(model):
 
 
 # Converts a dictionary of transcript distribution percentiles
-# Loosely based on:
-# Schultz, A, & Qutub, AA (2016). Reconstruction of Tissue-Specific Metabolic Networks Using CORDA. 
-#      PLoS Computational Biology. https://doi.org/10.1371/journal.pcbi.1004808
 def assign_coefficients(raw_transcription_dict, model, percentiles, min_coefficients):
     
     # Screen transcriptomic abundances for genes that are included in model
@@ -150,11 +147,6 @@ def incorporate_user_defined_reactions(rm_rxns, reaction_file):
 
 
 # Determine those reactions that carry flux in a pFBA objective set to a threshold of maximum
-# Based on:
-# Lewis NE, et al.(2010). Omic data from evolved E. coli are consistent with computed optimal growth from
-#       genome-scale models. Molecular Systems Biology. 6, 390.
-# Holzhütter, HG. (2004). The principle of flux minimization and its application to estimate 
-#       stationary fluxes in metabolic networks. Eur. J. Biochem. 271; 2905–2922.
 def constrain_and_analyze_model(model, coefficient_dict, fraction, sampling_depth):
     
     with model as constrained_model:
@@ -212,16 +204,16 @@ def prune_model(new_model, rm_rxns, defined_rxns, conserve):
         
     # Parse elements highlighted for pruning based on GPRs
     if conserve == 'y':
-    	final_rm_rxns = []
-    	for rxn in rm_rxns:
-        	test = 'pass'
-        	current_genes = list(new_model.reactions.get_by_id(rxn).genes)
-        	for gene in current_genes:
-            	for rxn_sub in gene.reactions:
-                	if rxn_sub.id not in rm_rxns:
-                    test = 'fail'
-                	else:
-                    	pass
+        final_rm_rxns = []
+        for rxn in rm_rxns:
+            test = 'pass'
+            current_genes = list(new_model.reactions.get_by_id(rxn).genes)
+            for gene in current_genes:
+                for rxn_sub in gene.reactions:
+                    if rxn_sub.id not in rm_rxns:
+                        test = 'fail'
+                    else:
+                        pass
             
         	if test == 'pass': final_rm_rxns.append(rxn)
     else:
