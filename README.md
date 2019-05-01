@@ -30,10 +30,13 @@ contextualized_model, flux_samples = riptide(my_model, transcript_abundances)
         User-provided file name which contains gene IDs and associated transcription values
     header : boolean
         Defines if read abundance file has a header that needs to be ignored
+        default is no header
     replicates : boolean
         Defines if read abundances contains replicates and medians require calculation
+        default is no replicates
     sep: string
         Defines what character separates entries on each line
+        defaults to tab (.tsv)
 
 
     riptide() parameters
