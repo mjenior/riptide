@@ -17,13 +17,26 @@ pip install riptide
 ### Example usage:
 from riptide import *
 
-my_model = cobra.io.read_sbml_model('my_model.sbml')
+my_model = cobra.io.read_sbml_model('examples/model.sbml')
 
-transcript_abundances = read_transcription_file('reads_to_genes.tsv', replicates=True)
+transcript_abundances = read_transcription_file('examples/transcriptome.tsv', replicates=True)
 
 contextualized_model, flux_samples = riptide(my_model, transcript_abundances)
 
-    Parameters
+
+    read_transcription_file() parameters
+    ----------
+    read_abundances_file : string
+        User-provided file name which contains gene IDs and associated transcription values
+    header : boolean
+        Defines if read abundance file has a header that needs to be ignored
+    replicates : boolean
+        Defines if read abundances contains replicates and medians require calculation
+    sep: string
+        Defines what character separates entries on each line
+
+
+    riptide() parameters
     ----------
     model : cobra.Model
         The model to be contextualized
