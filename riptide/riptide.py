@@ -348,13 +348,13 @@ def operation_report(start_time, model, riptide, old_vol, new_vol):
     duration = time.time() - start_time
     if duration < 60.0:
         duration = round(duration)
-        print '\nRIPTiDe completed in ' + str(duration) + ' seconds'
+        print '\nRIPTiDe completed in ' + str(duration) + ' seconds\n'
     elif duration < 3600.0:
         duration = round((duration / 60.0), 1)
-        print '\nRIPTiDe completed in ' + str(duration) + ' minutes'
+        print '\nRIPTiDe completed in ' + str(duration) + ' minutes\n'
     else:
         duration = round((duration / 3600.0), 1)
-        print '\nRIPTiDe completed in ' + str(duration) + ' hours'
+        print '\nRIPTiDe completed in ' + str(duration) + ' hours\n'
 
 
 # Create context-specific model based on transcript distribution
@@ -389,7 +389,19 @@ def riptide(model, transcription, defined = False, sampling = 10000, percentiles
     	Conservatively remove inactive reactions based on GPR rules
     	Either 'y' or 'n', default in 'n' (no)
     '''
+
     start_time = time.time()
+    print('''
+        RIPTiDe v1.0
+        Released: 4/3/2019
+
+        When using, please cite:
+        Jenior ML, Moutinho TJ, and Papin JA. (2019). Parsimonious transcript data integration improves context-specific predictions 
+            of bacterial metabolism in complex environments. BioRxiv. DOI .
+
+        For help with available arguments, please refer to the README associated with the GitHub repository.
+        https://github.com/mjenior/riptide
+        ''')
     
     # Correct some possible user error
     if sampling == False:
