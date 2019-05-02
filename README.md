@@ -19,9 +19,11 @@ from riptide import *
 
 my_model = cobra.io.read_sbml_model('examples/model.sbml')
 
-transcript_abundances = read_transcription_file('examples/transcriptome.tsv')
+transcript_abundances_1 = read_transcription_file('examples/transcriptome1.tsv')
+transcript_abundances_2 = read_transcription_file('examples/transcriptome2.tsv')
 
-contextualized_model, flux_samples = riptide(my_model, transcript_abundances)
+contextualized_model_1, flux_samples_1 = riptide(my_model, transcript_abundances_1)
+contextualized_model_2, flux_samples_2 = riptide(my_model, transcript_abundances_2)
 
 
     read_transcription_file() parameters

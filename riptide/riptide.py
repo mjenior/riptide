@@ -395,15 +395,16 @@ def riptide(model, transcription, defined = False, sampling = 10000, percentiles
 
     start_time = time.time()
     print('''
-        RIPTiDe v1.0
-        Released: 4/3/2019
+RIPTiDe v1.1
+Released: 4/3/2019
 
-        When using, please cite:
-        Jenior ML, Moutinho TJ, and Papin JA. (2019). Parsimonious transcript data integration improves context-specific predictions 
-            of bacterial metabolism in complex environments. BioRxiv. DOI .
+When using, please cite:
+Jenior ML, Moutinho TJ, and Papin JA. (2019). Parsimonious transcript data integration 
+    improves context-specific predictions of bacterial metabolism in complex environments. 
+    BioRxiv. DOI .
 
-        For help with available arguments, please refer to the README associated with the GitHub repository.
-        https://github.com/mjenior/riptide
+For help with available arguments, please refer to the README associated with the GitHub repository.
+https://github.com/mjenior/riptide
         ''')
     
     # Correct some possible user error
