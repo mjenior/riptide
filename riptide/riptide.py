@@ -66,7 +66,7 @@ def initialize_model(model):
         raise ValueError('ERROR: Provided model objective cannot carry flux! Please correct')
     
     # Calculate flux ranges and remove totally blocked reactions
-    flux_span = flux_variability_analysis(riptide_model, fraction_of_optimum=0.1)
+    flux_span = flux_variability_analysis(riptide_model, fraction_of_optimum=0.01)
     flux_ranges = {}
     blocked_rxns = []
     for rxn_id, min_max in flux_span.iterrows():
@@ -76,11 +76,8 @@ def initialize_model(model):
             flux_ranges[rxn_id] = [min(min_max), max(min_max)]
     for rxn in blocked_rxns: 
         riptide_model.reactions.get_by_id(rxn).remove_from_model(remove_orphans=True)
-        
-    # Calculate original solution space volume
-    ellipsoid_vol = calculate_polytope_volume(flux_ranges)
 
-    return riptide_model, ellipsoid_vol
+    return riptide_model
 
 
 # Converts a dictionary of transcript distribution percentiles
@@ -181,20 +178,17 @@ def constrain_and_analyze_model(model, coefficient_dict, fraction, sampling_dept
             inactive_rxns = set([rxn.id for rxn in constrained_model.reactions if abs(solution.fluxes[rxn.id]) < 1e-6])
             return inactive_rxns
         
-        else:
-            # Calculate upper fraction of optimum 
-            fraction_hi = 1.0 + (1.0 - fraction)
-        
+        else:        
             # Explore solution space of constrained model with flux sampling, allow deviation
             constrained_model.objective = constrained_model.problem.Objective(pfba_expr, direction='max', sloppy=True)
             solution = constrained_model.optimize()
             flux_sum_obj_val = solution.objective_value
-            flux_sum_constraint = constrained_model.problem.Constraint(pfba_expr, lb=flux_sum_obj_val*fraction, ub=flux_sum_obj_val*fraction_hi)
+            flux_sum_constraint = constrained_model.problem.Constraint(pfba_expr, lb=flux_sum_obj_val*fraction, ub=flux_sum_obj_val)
             constrained_model.add_cons_vars([flux_sum_constraint])
             constrained_model.solver.update()
             
             # Perform flux sampling (or FVA)
-            flux_object = explore_flux_ranges(constrained_model, sampling_depth)
+            flux_object = explore_flux_ranges(constrained_model, sampling_depth, fraction)
             return flux_object
     
 
@@ -229,22 +223,23 @@ def prune_model(new_model, rm_rxns, defined_rxns, conserve):
     for rxn in final_rm_rxns:
         new_model.reactions.get_by_id(rxn).remove_from_model(remove_orphans=True)
     
-    # Prune possible residual orphans
+    # Prune possible residual orphans, kind of sloppy but it's the only way 
+    # I've found for it to actually thoroughly remove orphans
     removed = 1
     while removed == 1:
         removed = 0
         for cpd in new_model.metabolites:
             if len(cpd.reactions) == 0:
-                cpd.remove_from_model(); removed = 1
+                cpd.remove_from_model(remove_orphans=True); removed = 1
         for rxn in new_model.reactions:
             if len(rxn.metabolites) == 0: 
-                rxn.remove_from_model(); removed = 1
+                rxn.remove_from_model(remove_orphans=True); removed = 1
     
     return new_model
 
 
 # Analyze the possible ranges of flux in the constrained model
-def explore_flux_ranges(model, samples):
+def explore_flux_ranges(model, samples, fraction):
     
     try:
         sampling_object = ACHRSampler(model)
@@ -253,42 +248,19 @@ def explore_flux_ranges(model, samples):
     except:
         # Handle errors for models that are now too small
         print('Constrained solution space too narrow for sampling, performing FVA instead')        
-        flux_object = flux_variability_analysis(model, fraction_of_optimum=0.9)
+        flux_object = flux_variability_analysis(model, fraction_of_optimum=fraction)
         analysis = 'fva'
         
     return flux_object, analysis
     
+    
+# Calculate approximate volume of solution space, treated as ellipsoid
+def calculate_polytope_volume(model, fraction):
+    
+    flux_span = flux_variability_analysis(model, fraction_of_optimum=fraction)
+    bounds = {}
+    for rxn_id, min_max in flux_span.iterrows(): bounds[rxn_id] = [min(min_max), max(min_max)]
 
-# Constrain bounds for remaining reactions in model based on RIPTiDe results
-def apply_bounds(constrained_model, flux_object):
-    flux_ranges = {}
-    
-    # Handle FVA dataframe if necessary
-    if len(flux_object.columns) == 2:
-        for rxn in constrained_model.reactions:
-            min_max = list(flux_object.loc[rxn.id])
-            new_lb = min(min_max)
-            new_ub = max(min_max)
-            constrained_model.reactions.get_by_id(rxn.id).bounds = (new_lb, new_ub)
-            flux_ranges[rxn.id] = [new_lb, new_ub]
-    
-    # Handle flux sampling results
-    else:
-        for rxn in constrained_model.reactions:
-            distribution = list(flux_object[rxn.id])
-            new_lb = min(distribution)
-            new_ub = max(distribution)
-            constrained_model.reactions.get_by_id(rxn.id).bounds = (new_lb, new_ub)
-            flux_ranges[rxn.id] = [new_lb, new_ub]
-
-    ellipsoid_vol = calculate_polytope_volume(flux_ranges)
-        
-    return constrained_model, ellipsoid_vol
-    
-    
-# Calculate approximate volume of solution space, tretyed as ellipsoid
-def calculate_polytope_volume(bounds):
-    
     # Compile a list of radii from flux ranges
     radii = []
     for rxn in bounds.iterkeys():
@@ -321,7 +293,7 @@ def operation_report(start_time, model, riptide, old_vol, new_vol):
     old_ov = round(model.slim_optimize(), 3)
     per_shift = 100.0 - ((new_ov / old_ov) * 100.0)
     if per_shift == 0.0:
-        print('\nNo change in flux through the objective')
+        pass
     elif per_shift > 0.0:
         per_shift = round(abs(per_shift), 2)
         print('\nFlux through the objective REDUCED to ' + str(new_ov) + ' from ' + str(old_ov) + ' (' + str(per_shift) + '% shift)')
@@ -330,18 +302,17 @@ def operation_report(start_time, model, riptide, old_vol, new_vol):
         print('\nFlux through the objective INCREASED to ' + str(new_ov) + ' from ' + str(old_ov) + ' (' + str(per_shift) + '% shift)')
     
     # Solution space volume
-    if new_vol != 'none':
-        vol_shift = 100.0 - ((new_vol / old_vol) * 100.0)
-        if new_vol > 100000 or old_vol > 100000:
-            pass
-        elif vol_shift < 0.0:
-            vol_shift = round(abs(vol_shift), 2)
-            print('Solution space ellipsoid volume INCREASED to ~' + str(new_vol) + ' from ~' + str(old_vol) + ' (' + str(vol_shift) + '% shift)')
-        elif vol_shift > 0.0:
-            vol_shift = round(vol_shift, 2)
-            print('Solution space ellipsoid volume DECREASED to ~' + str(new_vol) + ' from ~' + str(old_vol) + ' (' + str(vol_shift) + '% shift)')
-        else:
-            print('No change in Solution space volume')
+    vol_shift = 100.0 - ((new_vol / old_vol) * 100.0)
+    if new_vol > 100000 or old_vol > 100000:
+        pass
+    elif vol_shift < 0.0:
+        vol_shift = round(abs(vol_shift), 2)
+        print('Solution space ellipsoid volume INCREASED to ~' + str(new_vol) + ' from ~' + str(old_vol) + ' (' + str(vol_shift) + '% shift)')
+    elif vol_shift > 0.0:
+        vol_shift = round(vol_shift, 2)
+        print('Solution space ellipsoid volume DECREASED to ~' + str(new_vol) + ' from ~' + str(old_vol) + ' (' + str(vol_shift) + '% shift)')
+    else:
+        print('No change in Solution space volume')
     
     # Check that prune model can still achieve flux through the objective (just in case)
     if riptide.slim_optimize() < 1e-6 or str(riptide.slim_optimize()) == 'nan':
@@ -381,31 +352,19 @@ def riptide(model, transcription, defined = False, sampling = 10000, percentiles
         Number of flux samples to collect, default is 10000, If False, sampling skipped
     percentiles : list of floats
         Percentile cutoffs of transcript abundance for linear coefficient assignments to associated reactions
-        Defaults are [50.0, 62.5, 75.0, 87.5]
+        Default is [50.0, 62.5, 75.0, 87.5]
     coefficients : list of floats
         Linear coefficients to weight reactions based on distribution placement
-        Defaults are [1.0, 0.5, 0.1, 0.01, 0.001]
+        Default is [1.0, 0.5, 0.1, 0.01, 0.001]
     fraction : float
         Minimum percent of optimal objective value during FBA steps
         Default is 0.8
     conservative : str
-    	Conservatively remove inactive reactions based on GPR rules
-    	Either 'y' or 'n', default in 'n' (no)
+        Conservatively remove inactive reactions based on genes
+        Either 'y' or 'n', default in 'n' (no)
     '''
 
     start_time = time.time()
-    print('''
-RIPTiDe v1.1
-Released: 4/3/2019
-
-When using, please cite:
-Jenior ML, Moutinho TJ, and Papin JA. (2019). Parsimonious transcript data integration 
-    improves context-specific predictions of bacterial metabolism in complex environments. 
-    BioRxiv. DOI .
-
-For help with available arguments, please refer to the README associated with the GitHub repository.
-https://github.com/mjenior/riptide
-        ''')
     
     # Correct some possible user error
     if sampling == False:
@@ -427,25 +386,24 @@ https://github.com/mjenior/riptide
 
     # Check original model functionality
     # Partition reactions based on transcription percentile intervals, assign corresponding reaction coefficients
-    print('Initializing model and parsing transcriptome...')
-    riptide_model, orig_volume = initialize_model(model)
+    print('\nInitializing model and parsing transcriptome...')
+    riptide_model = initialize_model(model)
+    orig_volume = calculate_polytope_volume(riptide_model, fraction)
     coefficient_dict = assign_coefficients(transcription, riptide_model, percentiles, coefficients)
     
     # Prune now inactive network sections based on coefficients
     print('Pruning zero flux subnetworks...')
     rm_rxns = constrain_and_analyze_model(riptide_model, coefficient_dict, fraction, 'minimization')
     riptide_model = prune_model(riptide_model, rm_rxns, defined, conservative)
-    
+    new_volume = calculate_polytope_volume(riptide_model, fraction)
+
     # Find optimal solution space based on transcription and final constraints
     if sampling != False:
         print('Sampling context-specific solution space (longest step)...')
         flux_object, analysis_type = constrain_and_analyze_model(riptide_model, coefficient_dict, fraction, samples)
-        
-        # Constrain new model
-        riptide_model, new_volume = apply_bounds(riptide_model, flux_object)
-        operation_report(start_time, model, riptide_model, orig_volume, new_volume)
         return riptide_model, flux_object
-    
     else:
-        operation_report(start_time, model, riptide_model, orig_volume, 'none')
         return riptide_model
+
+    # Report performance stats to the user
+    operation_report(start_time, model, riptide_model, orig_volume, new_volume)

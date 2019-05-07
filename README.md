@@ -4,7 +4,7 @@ Reaction Inclusion by Parsimonious usage and Transcript Distribution
 
 
 ### Please cite when using:
-Jenior ML, Moutinho TJ, and Papin JA. (2019). Parsimonious transcript data integration improves context-specific predictions of bacterial metabolism in complex environments. BioRxiv. DOI
+Jenior ML, Moutinho TJ, and Papin JA. (2019). Parsimonious transcript data integration improves context-specific predictions of bacterial metabolism in complex environments. BioRxiv. DOI 
 
 ### Dependencies
 cobrapy (>=version 0.13)
@@ -17,7 +17,7 @@ pip install riptide
 ### Example usage:
 from riptide import *
 
-my_model = cobra.io.read_sbml_model('examples/model.sbml')
+my_model = cobra.io.read_sbml_model('examples/genre.sbml')
 
 transcript_abundances_1 = read_transcription_file('examples/transcriptome1.tsv')
 transcript_abundances_2 = read_transcription_file('examples/transcriptome2.tsv')
