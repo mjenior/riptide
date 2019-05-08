@@ -282,24 +282,24 @@ def operation_report(start_time, model, riptide, old_vol, new_vol):
     
     # Pruning
     perc_removal = 100.0 - ((float(len(riptide.reactions)) / float(len(model.reactions))) * 100.0)
-    perc_removal = round(perc_removal, 1)
+    perc_removal = round(perc_removal, 2)
     print('\nReactions pruned to ' + str(len(riptide.reactions)) + ' from ' + str(len(model.reactions)) + ' (' + str(perc_removal) + '% reduction)')
     perc_removal = 100.0 - ((float(len(riptide.metabolites)) / float(len(model.metabolites))) * 100.0)
-    perc_removal = round(perc_removal, 1)
+    perc_removal = round(perc_removal, 2)
     print('Metabolites pruned to ' + str(len(riptide.metabolites)) + ' from ' + str(len(model.metabolites)) + ' (' + str(perc_removal) + '% reduction)')
     
     # Flux through objective
-    new_ov = round(riptide.slim_optimize(), 3)
-    old_ov = round(model.slim_optimize(), 3)
+    new_ov = round(riptide.slim_optimize(), 2)
+    old_ov = round(model.slim_optimize(), 2)
     per_shift = 100.0 - ((new_ov / old_ov) * 100.0)
     if per_shift == 0.0:
         pass
     elif per_shift > 0.0:
         per_shift = round(abs(per_shift), 2)
-        print('\nFlux through the objective REDUCED to ' + str(new_ov) + ' from ' + str(old_ov) + ' (' + str(per_shift) + '% shift)')
+        print('Flux through the objective REDUCED to ~' + str(new_ov) + ' from ~' + str(old_ov) + ' (' + str(per_shift) + '% shift)')
     elif per_shift < 0.0:
         per_shift = round(abs(per_shift), 2)
-        print('\nFlux through the objective INCREASED to ' + str(new_ov) + ' from ' + str(old_ov) + ' (' + str(per_shift) + '% shift)')
+        print('Flux through the objective INCREASED to ~' + str(new_ov) + ' from ' + str(old_ov) + ' (' + str(per_shift) + '% shift)')
     
     # Solution space volume
     vol_shift = 100.0 - ((new_vol / old_vol) * 100.0)
@@ -307,28 +307,26 @@ def operation_report(start_time, model, riptide, old_vol, new_vol):
         pass
     elif vol_shift < 0.0:
         vol_shift = round(abs(vol_shift), 2)
-        print('Solution space ellipsoid volume INCREASED to ~' + str(new_vol) + ' from ~' + str(old_vol) + ' (' + str(vol_shift) + '% shift)')
+        print('Solution space volume INCREASED to ~' + str(new_vol) + ' from ~' + str(old_vol) + ' (' + str(vol_shift) + '% shift)')
     elif vol_shift > 0.0:
         vol_shift = round(vol_shift, 2)
-        print('Solution space ellipsoid volume DECREASED to ~' + str(new_vol) + ' from ~' + str(old_vol) + ' (' + str(vol_shift) + '% shift)')
-    else:
-        print('No change in Solution space volume')
+        print('Solution space volume DECREASED to ~' + str(new_vol) + ' from ~' + str(old_vol) + ' (' + str(vol_shift) + '% shift)')
     
     # Check that prune model can still achieve flux through the objective (just in case)
     if riptide.slim_optimize() < 1e-6 or str(riptide.slim_optimize()) == 'nan':
         print('\nWARNING: Contextualized model objective can no longer carry flux')
     
     # Run time
-    duration = time.time() - start_time
-    if duration < 60.0:
-        duration = round(duration)
-        print '\nRIPTiDe completed in ' + str(duration) + ' seconds\n'
-    elif duration < 3600.0:
-        duration = round((duration / 60.0), 1)
-        print '\nRIPTiDe completed in ' + str(duration) + ' minutes\n'
+    seconds = round(time.time() - start_time)
+    if seconds < 60:
+        print '\nRIPTiDe completed in ' + str(seconds) + ' seconds\n'
+    elif seconds < 3600:
+        minutes, seconds = divmod(seconds, 60)
+        print '\nRIPTiDe completed in ' + str(minutes) + ' minutes and ' + str(seconds) + ' seconds\n'
     else:
-        duration = round((duration / 3600.0), 1)
-        print '\nRIPTiDe completed in ' + str(duration) + ' hours\n'
+        minutes, seconds = divmod(seconds, 60)
+        hours, minutes = divmod(minutes, 60)
+        print '\nRIPTiDe completed in ' + str(hours) + ' hours, ' + str(minutes) + ' minutes, and ' + str(seconds) + ' seconds\n'
 
 
 # Create context-specific model based on transcript distribution
@@ -399,11 +397,11 @@ def riptide(model, transcription, defined = False, sampling = 10000, percentiles
 
     # Find optimal solution space based on transcription and final constraints
     if sampling != False:
-        print('Sampling context-specific solution space (longest step)...')
+        print('Sampling context-specific flux distributions (longest step)...')
         flux_object, analysis_type = constrain_and_analyze_model(riptide_model, coefficient_dict, fraction, samples)
+        operation_report(start_time, model, riptide_model, orig_volume, new_volume)
         return riptide_model, flux_object
     else:
+        operation_report(start_time, model, riptide_model, orig_volume, new_volume)
         return riptide_model
 
-    # Report performance stats to the user
-    operation_report(start_time, model, riptide_model, orig_volume, new_volume)
