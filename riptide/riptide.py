@@ -230,10 +230,10 @@ def prune_model(new_model, rm_rxns, defined_rxns, conserve):
         removed = 0
         for cpd in new_model.metabolites:
             if len(cpd.reactions) == 0:
-                cpd.remove_from_model(remove_orphans=True); removed = 1
+                cpd.remove_from_model(); removed = 1
         for rxn in new_model.reactions:
             if len(rxn.metabolites) == 0: 
-                rxn.remove_from_model(remove_orphans=True); removed = 1
+                rxn.remove_from_model(); removed = 1
     
     return new_model
 
