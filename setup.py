@@ -3,7 +3,7 @@
 from distutils.core import setup
 
 setup(name='riptide',
-	version='1.5', 
+	version='1.6', 
 	description='Reaction Inclusion by Parsimony and Transcript Distribution (RIPTiDe)',
 	author='Matt Jenior',
 	author_email='mattjenior@gmail.com',

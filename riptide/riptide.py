@@ -147,7 +147,7 @@ def incorporate_user_defined_reactions(rm_rxns, reaction_file):
 
 
 # Determine those reactions that carry flux in a pFBA objective set to a threshold of maximum
-def constrain_and_analyze_model(model, coefficient_dict, fraction, sampling_depth):
+def constrain_and_analyze_model(model, coefficient_dict, fraction, sampling_depth, bound_model):
     
     with model as constrained_model:
 
@@ -189,7 +189,12 @@ def constrain_and_analyze_model(model, coefficient_dict, fraction, sampling_dept
             
             # Perform flux sampling (or FVA)
             flux_object = explore_flux_ranges(constrained_model, sampling_depth, fraction)
-            return flux_object
+
+            if bound_model == False:
+                return flux_object
+            else:
+                constrained_model = apply_bounds(constrained_model, fraction)
+                return flux_object, constrained_model
     
 
 # Prune model based on blocked reactions from minimization as well as user-defined reactions
@@ -200,7 +205,7 @@ def prune_model(new_model, rm_rxns, defined_rxns, conserve):
         rm_rxns = incorporate_user_defined_reactions(rm_rxns, defined_rxns)
         
     # Parse elements highlighted for pruning based on GPRs
-    if conserve == 'y':
+    if conserve == True:
         final_rm_rxns = []
         for rxn in rm_rxns:
             test = 'pass'
@@ -252,8 +257,18 @@ def explore_flux_ranges(model, samples, fraction):
         analysis = 'fva'
         
     return flux_object, analysis
-    
-    
+  
+
+# Apply new bounds to each reaction based on transcript-based constraints
+def apply_bounds(constrained_model, fraction):
+
+    fva_result = flux_variability_analysis(model, fraction_of_optimum=fraction)
+    for rxn, min_max in fva_result.iterrows(): 
+        constrained_model.reactions.get_by_id(rxn).bounds = (min(min_max), max(min_max))
+
+    return constrained_model
+
+  
 # Calculate approximate volume of solution space, treated as ellipsoid
 def calculate_polytope_volume(model, fraction):
     
@@ -283,10 +298,10 @@ def operation_report(start_time, model, riptide, old_vol, new_vol):
     # Pruning
     perc_removal = 100.0 - ((float(len(riptide.reactions)) / float(len(model.reactions))) * 100.0)
     perc_removal = round(perc_removal, 2)
-    print('\nReactions pruned to ' + str(len(riptide.reactions)) + ' from ' + str(len(model.reactions)) + ' (' + str(perc_removal) + '% reduction)')
+    print('\nReactions pruned to ' + str(len(riptide.reactions)) + ' from ' + str(len(model.reactions)) + ' (' + str(perc_removal) + '% change)')
     perc_removal = 100.0 - ((float(len(riptide.metabolites)) / float(len(model.metabolites))) * 100.0)
     perc_removal = round(perc_removal, 2)
-    print('Metabolites pruned to ' + str(len(riptide.metabolites)) + ' from ' + str(len(model.metabolites)) + ' (' + str(perc_removal) + '% reduction)')
+    print('Metabolites pruned to ' + str(len(riptide.metabolites)) + ' from ' + str(len(model.metabolites)) + ' (' + str(perc_removal) + '% change)')
     
     # Flux through objective
     new_ov = round(riptide.slim_optimize(), 2)
@@ -296,21 +311,23 @@ def operation_report(start_time, model, riptide, old_vol, new_vol):
         pass
     elif per_shift > 0.0:
         per_shift = round(abs(per_shift), 2)
-        print('Flux through the objective REDUCED to ~' + str(new_ov) + ' from ~' + str(old_ov) + ' (' + str(per_shift) + '% shift)')
+        print('Flux through the objective DECREASED to ~' + str(new_ov) + ' from ~' + str(old_ov) + ' (' + str(per_shift) + '% change)')
     elif per_shift < 0.0:
         per_shift = round(abs(per_shift), 2)
-        print('Flux through the objective INCREASED to ~' + str(new_ov) + ' from ' + str(old_ov) + ' (' + str(per_shift) + '% shift)')
+        print('Flux through the objective INCREASED to ~' + str(new_ov) + ' from ' + str(old_ov) + ' (' + str(per_shift) + '% change)')
     
     # Solution space volume
     vol_shift = 100.0 - ((new_vol / old_vol) * 100.0)
+    new_vol = round(new_vol, 2)
+    old_vol = round(old_vol, 2)
     if new_vol > 100000 or old_vol > 100000:
         pass
     elif vol_shift < 0.0:
         vol_shift = round(abs(vol_shift), 2)
-        print('Solution space volume INCREASED to ~' + str(new_vol) + ' from ~' + str(old_vol) + ' (' + str(vol_shift) + '% shift)')
+        print('Solution space volume INCREASED to ~' + str(new_vol) + ' from ~' + str(old_vol) + ' (' + str(vol_shift) + '% change)')
     elif vol_shift > 0.0:
         vol_shift = round(vol_shift, 2)
-        print('Solution space volume DECREASED to ~' + str(new_vol) + ' from ~' + str(old_vol) + ' (' + str(vol_shift) + '% shift)')
+        print('Solution space volume DECREASED to ~' + str(new_vol) + ' from ~' + str(old_vol) + ' (' + str(vol_shift) + '% change)')
     
     # Check that prune model can still achieve flux through the objective (just in case)
     if riptide.slim_optimize() < 1e-6 or str(riptide.slim_optimize()) == 'nan':
@@ -319,18 +336,19 @@ def operation_report(start_time, model, riptide, old_vol, new_vol):
     # Run time
     seconds = round(time.time() - start_time)
     if seconds < 60:
-        print '\nRIPTiDe completed in ' + str(seconds) + ' seconds\n'
+        print '\nRIPTiDe completed in ' + str(int(seconds)) + ' seconds\n'
     elif seconds < 3600:
         minutes, seconds = divmod(seconds, 60)
-        print '\nRIPTiDe completed in ' + str(minutes) + ' minutes and ' + str(seconds) + ' seconds\n'
+        print '\nRIPTiDe completed in ' + str(int(minutes)) + ' minutes and ' + str(int(seconds)) + ' seconds\n'
     else:
         minutes, seconds = divmod(seconds, 60)
         hours, minutes = divmod(minutes, 60)
-        print '\nRIPTiDe completed in ' + str(hours) + ' hours, ' + str(minutes) + ' minutes, and ' + str(seconds) + ' seconds\n'
+        print '\nRIPTiDe completed in ' + str(int(hours)) + ' hours, ' + str(int(minutes)) + ' minutes, and ' + str(int(seconds)) + ' seconds\n'
 
 
 # Create context-specific model based on transcript distribution
-def riptide(model, transcription, defined = False, sampling = 10000, percentiles = [50.0, 62.5, 75.0, 87.5], coefficients = [1.0, 0.5, 0.1, 0.01, 0.001], fraction = 0.8, conservative = 'n'):
+def riptide(model, transcription, defined = False, samples = 10000, percentiles = [50.0, 62.5, 75.0, 87.5], 
+            coefficients = [1.0, 0.5, 0.1, 0.01, 0.001], fraction = 0.8, conservative = False, bound = False):
     '''Reaction Inclusion by Parsimony and Transcriptomic Distribution or RIPTiDe
     
     Creates a contextualized metabolic model based on parsimonious usage of reactions defined
@@ -343,34 +361,33 @@ def riptide(model, transcription, defined = False, sampling = 10000, percentiles
         The model to be contextualized
     transcription : dictionary
         Dictionary of transcript abundances, output of read_transcription_file()
-    defined : False or File
+    defined : File
         Text file containing reactions IDs for forced inclusion listed on the first line and exclusion 
         listed on the second line (both .csv and .tsv formats supported)
-    sampling : int or False
-        Number of flux samples to collect, default is 10000, If False, sampling skipped
-    percentiles : list of floats
+    samples : int 
+        Number of flux samples to collect, default is 10000, If 0, sampling skipped
+    percentiles : list
         Percentile cutoffs of transcript abundance for linear coefficient assignments to associated reactions
         Default is [50.0, 62.5, 75.0, 87.5]
-    coefficients : list of floats
+    coefficients : list
         Linear coefficients to weight reactions based on distribution placement
         Default is [1.0, 0.5, 0.1, 0.01, 0.001]
     fraction : float
         Minimum percent of optimal objective value during FBA steps
         Default is 0.8
-    conservative : str
+    conservative : bool
         Conservatively remove inactive reactions based on genes
-        Either 'y' or 'n', default in 'n' (no)
+        Default is False
+    bound : bool
+        Bounds each reaction based on transcriptomic constraints
+        Default is False
     '''
 
     start_time = time.time()
     
     # Correct some possible user error
-    if sampling == False:
-        pass
-    elif sampling <= 0: 
-        sampling = 10000
-    else: 
-        samples = int(sampling)
+    samples = int(samples)
+    if samples < 0: samples = 0
     if len(set(transcription.values())) == 1:
         raise ValueError('ERROR: All transcriptomic abundances are identical! Please correct')
     if len(coefficients) != len(percentiles) + 1:
@@ -380,7 +397,6 @@ def riptide(model, transcription, defined = False, sampling = 10000, percentiles
         fraction = 0.8
     percentiles.sort() # sort ascending
     coefficients.sort(reverse=True) # sort descending
-    if conservative not in ['y','n']: conservative = 'y'
 
     # Check original model functionality
     # Partition reactions based on transcription percentile intervals, assign corresponding reaction coefficients
@@ -396,9 +412,12 @@ def riptide(model, transcription, defined = False, sampling = 10000, percentiles
     new_volume = calculate_polytope_volume(riptide_model, fraction)
 
     # Find optimal solution space based on transcription and final constraints
-    if sampling != False:
+    if samples != 0:
         print('Sampling context-specific flux distributions (longest step)...')
-        flux_object, analysis_type = constrain_and_analyze_model(riptide_model, coefficient_dict, fraction, samples)
+        if bound == False:
+            flux_object = constrain_and_analyze_model(riptide_model, coefficient_dict, fraction, samples, bound)
+        else:
+            flux_object, riptide_model = constrain_and_analyze_model(riptide_model, coefficient_dict, fraction, samples, bound)
         operation_report(start_time, model, riptide_model, orig_volume, new_volume)
         return riptide_model, flux_object
     else:

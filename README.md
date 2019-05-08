@@ -52,18 +52,21 @@ contextualized_model_2, flux_samples_2 = riptide(my_model, transcript_abundances
     defined : False or File
         Text file containing reactions IDs for forced inclusion listed on the first line and exclusion 
         listed on the second line (both .csv and .tsv formats supported)
-    sampling : int or False
-        Number of flux samples to collect, default is 10000, If False, sampling skipped
+    samples : int 
+        Number of flux samples to collect, default is 10000, If 0, sampling skipped
     percentiles : list of floats
         Percentile cutoffs of transcript abundance for linear coefficient assignments to associated reactions
-        Defaults are [50.0, 62.5, 75.0, 87.5]
+        Default is [50.0, 62.5, 75.0, 87.5]
     coefficients : list of floats
         Linear coefficients to weight reactions based on distribution placement
-        Defaults are [1.0, 0.5, 0.1, 0.01, 0.001]
+        Default is [1.0, 0.5, 0.1, 0.01, 0.001]
     fraction : float
         Minimum percent of optimal objective value during FBA steps
         Default is 0.8
-    conservative : str
-    	Conservatively remove inactive reactions based on GPR rules
-    	Either 'y' or 'n', default in 'n' (no)
+    conservative : bool
+        Conservatively remove inactive reactions based on genes
+        Default is False
+    bound : bool
+        Bounds each reaction based on transcriptomic constraints
+        Default is False
 
