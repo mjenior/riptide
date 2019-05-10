@@ -30,9 +30,7 @@ Cobrapy should be >=version 0.13
 Example Use
 -----------
 
-Be sure to check out the `Example Notebook`_ that demos ``omfvista``!
-Here's an example using the sample data hosted in the `OMF repository`_.
-
+The base use case of RIPTiDe is as follows:
 
 .. code-block:: python
 
@@ -46,6 +44,51 @@ Here's an example using the sample data hosted in the `OMF repository`_.
     riptide_object_1 = riptide(my_model, transcript_abundances_1)
     riptide_object_2 = riptide(my_model, transcript_abundances_2)
 .. 
+
+Additional parameters for main RIPTiDe function:
+
+read_transcription_file()::
+
+    read_abundances_file : string
+        User-provided file name which contains gene IDs and associated transcription values
+    header : boolean
+        Defines if read abundance file has a header that needs to be ignored
+        default is no header
+    replicates : boolean
+        Defines if read abundances contains replicates and medians require calculation
+        default is no replicates
+    sep: string
+        Defines what character separates entries on each line
+        defaults to tab (.tsv)
+..
+
+riptide()::
+
+    model : cobra.Model
+        The model to be contextualized
+    transcription : dictionary
+        Dictionary of transcript abundances, output of read_transcription_file()
+    defined : False or File
+        Text file containing reactions IDs for forced inclusion listed on the first line and exclusion 
+        listed on the second line (both .csv and .tsv formats supported)
+    samples : int 
+        Number of flux samples to collect, default is 10000, If 0, sampling skipped
+    percentiles : list of floats
+        Percentile cutoffs of transcript abundance for linear coefficient assignments to associated reactions
+        Default is [50.0, 62.5, 75.0, 87.5]
+    coefficients : list of floats
+        Linear coefficients to weight reactions based on distribution placement
+        Default is [1.0, 0.5, 0.1, 0.01, 0.001]
+    fraction : float
+        Minimum percent of optimal objective value during FBA steps
+        Default is 0.8
+    conservative : bool
+        Conservatively remove inactive reactions based on genes
+        Default is False
+    bound : bool
+        Bounds each reaction based on transcriptomic constraints
+        Default is False
+..
 
 The resulting RIPTiDe object properties::
 
