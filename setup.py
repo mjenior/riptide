@@ -3,9 +3,9 @@
 from distutils.core import setup
 
 setup(name='riptide',
-	version='1.7', 
+	version='1.7.1', 
 	description='Reaction Inclusion by Parsimony and Transcript Distribution (RIPTiDe)',
-	author='Matt Jenior',
+	author='Matthew Jenior',
 	author_email='mattjenior@gmail.com',
 	url='https://github.com/mjenior/riptide',
 	packages=['riptide'],
