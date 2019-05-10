@@ -422,7 +422,7 @@ def riptide(model, transcription, defined = False, samples = 10000, percentiles 
     
     # Prune now inactive network sections based on coefficients
     print('Pruning zero flux subnetworks...')
-    rm_rxns = constrain_and_analyze_model(riptide_model, coefficient_dict, fraction, 'minimization')
+    rm_rxns = constrain_and_analyze_model(riptide_model, coefficient_dict, fraction, 'minimization', bound)
     riptide_model = prune_model(riptide_model, rm_rxns, defined, conservative)
     new_volume = calculate_polytope_volume(riptide_model, fraction)
 

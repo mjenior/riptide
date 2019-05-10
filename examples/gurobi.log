@@ -1,0 +1,7 @@
+
+Gurobi 8.0.0 (linux64, Python) logging started Fri May 10 14:42:49 2019
+
+Academic license - for non-commercial use only
+Read LP format model from file /tmp/tmpHAKRQz.lp
+Reading time = 0.00 seconds
+: 14 rows, 32 columns, 64 nonzeros
