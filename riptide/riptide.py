@@ -14,6 +14,16 @@ from cobra.manipulation.delete import remove_genes
 from cobra.flux_analysis.sampling import ACHRSampler
 from cobra.flux_analysis import flux_variability_analysis
 
+
+# Create class to house riptide 
+class riptideClass:
+    model = 'NULL'
+    fluxes = 'NULL'
+    quantile_range = 'NULL'
+    linear_coefficient_range = 'NULL'
+    fraction_of_optimum = 'NULL'
+
+
 # Read in transcriptomic read abundances, default is tsv with no header 
 def read_transcription_file(read_abundances_file, header=False, replicates=False, sep='\t'):
     '''Generates dictionary of transcriptomic abundances from a file.
@@ -384,6 +394,7 @@ def riptide(model, transcription, defined = False, samples = 10000, percentiles 
     '''
 
     start_time = time.time()
+    riptide_object = riptideClass()
     
     # Correct some possible user error
     samples = int(samples)
@@ -397,6 +408,10 @@ def riptide(model, transcription, defined = False, samples = 10000, percentiles 
         fraction = 0.8
     percentiles.sort() # sort ascending
     coefficients.sort(reverse=True) # sort descending
+
+    riptide_object.quantile_range = percentiles
+    riptide_object.linear_coefficient_range = coefficients
+    riptide_object.fraction_of_optimum = fraction
 
     # Check original model functionality
     # Partition reactions based on transcription percentile intervals, assign corresponding reaction coefficients
@@ -418,9 +433,12 @@ def riptide(model, transcription, defined = False, samples = 10000, percentiles 
             flux_object = constrain_and_analyze_model(riptide_model, coefficient_dict, fraction, samples, bound)
         else:
             flux_object, riptide_model = constrain_and_analyze_model(riptide_model, coefficient_dict, fraction, samples, bound)
-        operation_report(start_time, model, riptide_model, orig_volume, new_volume)
-        return riptide_model, flux_object
+
+        riptide_object.model = riptide_model
+        riptide_object.fluxes = flux_object
     else:
-        operation_report(start_time, model, riptide_model, orig_volume, new_volume)
-        return riptide_model
+        riptide_object.model = riptide_model
+
+    operation_report(start_time, model, riptide_model, orig_volume, new_volume)    
+    return riptide_model
 

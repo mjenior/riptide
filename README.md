@@ -23,9 +23,9 @@ transcript_abundances_1 = read_transcription_file('examples/transcriptome1.tsv')
 
 transcript_abundances_2 = read_transcription_file('examples/transcriptome2.tsv')
 
-contextualized_model_1, flux_samples_1 = riptide(my_model, transcript_abundances_1)
+riptide_object_1 = riptide(my_model, transcript_abundances_1)
 
-contextualized_model_2, flux_samples_2 = riptide(my_model, transcript_abundances_2)
+riptide_object_2 = riptide(my_model, transcript_abundances_2)
 
 
     read_transcription_file() parameters
