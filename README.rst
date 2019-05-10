@@ -47,7 +47,7 @@ The base use case of RIPTiDe is as follows:
 
 Additional parameters for main RIPTiDe functions:
 
-read_transcription_file()::
+**read_transcription_file()**::
 
     read_abundances_file : string
         User-provided file name which contains gene IDs and associated transcription values
@@ -62,7 +62,7 @@ read_transcription_file()::
         defaults to tab (.tsv)
 ..
 
-riptide()::
+**riptide()**::
 
     model : cobra.Model
         The model to be contextualized
