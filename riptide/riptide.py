@@ -440,5 +440,5 @@ def riptide(model, transcription, defined = False, samples = 10000, percentiles 
         riptide_object.model = riptide_model
 
     operation_report(start_time, model, riptide_model, orig_volume, new_volume)    
-    return riptide_model
+    return riptide_object
 
