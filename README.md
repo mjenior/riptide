@@ -98,7 +98,7 @@ RIPTiDe completed in 2 minutes and 41 seconds
 
 ```
 
-### Resulting RIPTiDe object properties:
+### Resulting RIPTiDe object (class) properties:
 
 - **model** - contextualized genome-scale metabolic network reconstruction
 - **fluxes** - Flux sampling or flux variability analysis pandas object
