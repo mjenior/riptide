@@ -57,9 +57,9 @@ sep: string
 **riptide()**
 ```
 model : cobra.Model
-    The model to be contextualized
+    The model to be contextualized (REQUIRED)
 transcription : dictionary
-    Dictionary of transcript abundances, output of read_transcription_file()
+    Dictionary of transcript abundances, output of read_transcription_file (REQUIRED)
 defined : False or File
     Text file containing reactions IDs for forced inclusion listed on the first line and exclusion 
     listed on the second line (both .csv and .tsv formats supported)
