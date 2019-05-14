@@ -105,7 +105,7 @@ RIPTiDe completed in 2 minutes and 41 seconds
 - **flux_type** - Type of flux analysis performed
 - **quantile_range** - percentile intervals by which to parse transcript abundance distribution
 - **linear_coefficient_range** - linear coeeficients assigned to corresponding quantile
-- **fraction_of_optimum** - minimum percentage of optimal allowable flux through the objective during contextualization
+- **fraction_of_optimum** - minimum specified percentage of optimal objective flux during contextualization
 
 
 ## Additional Information
