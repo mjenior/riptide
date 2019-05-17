@@ -30,8 +30,13 @@ from riptide import *
 
 my_model = cobra.io.read_sbml_model('examples/genre.sbml')
 
+<<<<<<< Updated upstream
 transcript_abundances_1 = read_transcription_file(read_abundances_file='examples/transcriptome1.tsv')
 transcript_abundances_2 = read_transcription_file(read_abundances_file='examples/transcriptome2.tsv')
+=======
+transcript_abundances_1 = read_transcription_file('examples/transcriptome1.tsv')
+transcript_abundances_2 = read_transcription_file('examples/transcriptome2.tsv', replicates=True)
+>>>>>>> Stashed changes
 
 riptide_object_1 = riptide(model=my_model, transcription=transcript_abundances_1)
 riptide_object_2 = riptide(model=my_model, transcription=transcript_abundances_2)
@@ -48,7 +53,7 @@ header : boolean
     default is no header
 replicates : boolean
     Defines if read abundances contains replicates and medians require calculation
-    default is no replicates
+    default is no replicates (False)
 sep: string
     Defines what character separates entries on each line
     defaults to tab (.tsv)
