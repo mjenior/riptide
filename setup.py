@@ -8,7 +8,7 @@ with open('README.md', 'r') as readme:
 
 setuptools.setup(
 	name='riptide',
-	version='1.7.8', 
+	version='1.7.9', 
 	description='Reaction Inclusion by Parsimony and Transcript Distribution (RIPTiDe)',
 	author='Matthew Jenior',
 	author_email='mattjenior@gmail.com',

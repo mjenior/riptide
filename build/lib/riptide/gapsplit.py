@@ -3,13 +3,6 @@ Keaty TC & Jensen PA (2019). gapsplit: Efficient random sampling for non-convex 
 bioRxiv 652917; doi: https://doi.org/10.1101/652917 
 '''
 
-import sys
-import time
-import numpy
-import pandas
-import cobra
-import cobra.test
-
 def gapsplit(
         model, n=500, max_tries=1000,
         primary='sequential', primary_tol=0.001,
@@ -241,8 +234,3 @@ def _reduce_gurobi(cobra):
 
     grb.upandas.te()
     return grb
-
-
-if __name__ == '__main__':
-    model = cobra.test.create_test_model('textbook')
-    gapsplit(model,100,primary="sequential")
