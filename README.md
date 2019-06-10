@@ -11,6 +11,12 @@ Please cite when using:
 Jenior ML, Moutinho TJ, and Papin JA. (2019). Parsimonious transcript data integration improves context-specific predictions of bacterial metabolism in complex environments. BioRxiv. DOI: https://doi.org/10.1101/637124
 ```
 
+Utilizes python implementation of the gapsplit flux sampler. Please also cite:
+```
+Keaty TC and Jensen PA (2019). gapsplit: Efficient random sampling for non-convex constraint-based models.
+bioRxiv 652917; doi: https://doi.org/10.1101/652917 
+```
+
 ## Installation
 
 Installation is simply:
@@ -26,25 +32,25 @@ $ pip install git+https://github.com/mjenior/riptide
 ## Usage
 
 ```python
-from riptide import *
+import riptide
 
 my_model = cobra.io.read_sbml_model('examples/genre.sbml')
 
 <<<<<<< Updated upstream
-transcript_abundances_1 = read_transcription_file(read_abundances_file='examples/transcriptome1.tsv')
-transcript_abundances_2 = read_transcription_file(read_abundances_file='examples/transcriptome2.tsv')
+transcript_abundances_1 = riptide.read_transcription_file(read_abundances_file='examples/transcriptome1.tsv')
+transcript_abundances_2 = riptide.read_transcription_file(read_abundances_file='examples/transcriptome2.tsv')
 =======
-transcript_abundances_1 = read_transcription_file('examples/transcriptome1.tsv')
-transcript_abundances_2 = read_transcription_file('examples/transcriptome2.tsv', replicates=True)
+transcript_abundances_1 = riptide.read_transcription_file('examples/transcriptome1.tsv')
+transcript_abundances_2 = riptide.read_transcription_file('examples/transcriptome2.tsv', replicates=True)
 >>>>>>> Stashed changes
 
-riptide_object_1 = riptide(model=my_model, transcription=transcript_abundances_1)
-riptide_object_2 = riptide(model=my_model, transcription=transcript_abundances_2)
+riptide_object_1 = riptide.contextualize(model=my_model, transcription=transcript_abundances_1)
+riptide_object_2 = riptide.contextualize(model=my_model, transcription=transcript_abundances_2)
 ``` 
 
 ### Additional parameters for main RIPTiDe functions:
 
-**read_transcription_file()**
+**riptide.read_transcription_file()**
 ```
 read_abundances_file : string
     User-provided file name which contains gene IDs and associated transcription values
@@ -59,7 +65,7 @@ sep: string
     defaults to tab (.tsv)
 ```
 
-**riptide()**
+**riptide.contextualize()**
 ```
 model : cobra.Model
     The model to be contextualized (REQUIRED)
