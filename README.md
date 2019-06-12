@@ -8,13 +8,12 @@ Transcriptomic analyses of bacteria have become instrumental to our understandin
 
 Please cite when using:
 ```
-Jenior ML, Moutinho TJ, and Papin JA. (2019). Parsimonious transcript data integration improves context-specific predictions of bacterial metabolism in complex environments. BioRxiv. DOI: https://doi.org/10.1101/637124
+Jenior ML, Moutinho TJ, and Papin JA. (2019). Parsimonious transcript data integration improves context-specific predictions of bacterial metabolism in complex environments. bioRxiv 637124; doi: https://doi.org/10.1101/637124
 ```
 
 Utilizes python implementation of the gapsplit flux sampler. Please also cite:
 ```
-Keaty TC and Jensen PA (2019). gapsplit: Efficient random sampling for non-convex constraint-based models.
-bioRxiv 652917; doi: https://doi.org/10.1101/652917 
+Keaty TC and Jensen PA (2019). gapsplit: Efficient random sampling for non-convex constraint-based models. bioRxiv 652917; doi: https://doi.org/10.1101/652917 
 ```
 
 ## Dependencies
@@ -117,6 +116,8 @@ RIPTiDe completed in 1 minutes and 13 seconds
 ### Resulting RIPTiDe object (class) properties:
 
 - **model** - contextualized genome-scale metabolic network reconstruction
+- **transcriptome** - dictionary of transcriptomic abundances provded by user
+- **coefficients** - dictionary of linear coefficients assigned to each reaction based on transcript values
 - **fluxes** - Flux sampling or flux variability analysis pandas object
 - **flux_type** - Type of flux analysis performed
 - **quantile_range** - percentile intervals by which to parse transcript abundance distribution

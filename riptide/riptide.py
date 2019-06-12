@@ -102,7 +102,7 @@ def contextualize(model, transcription, defined = False, samples = 500, percenti
 
     # Find optimal solution space based on transcription and final constraints
     if samples != 0:
-        print('Sampling context-specific flux distributions (longest step)...')
+        print('Sampling context-specific flux distributions...')
         flux_object, flux_type = _constrain_and_analyze_model(riptide_model, coefficient_dict, fraction, samples)
         riptide_object.model = riptide_model
         riptide_object.fluxes = flux_object
