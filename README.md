@@ -17,6 +17,13 @@ Keaty TC and Jensen PA (2019). gapsplit: Efficient random sampling for non-conve
 bioRxiv 652917; doi: https://doi.org/10.1101/652917 
 ```
 
+## Dependencies
+```
+>=cobra-0.15.3
+>=pandas-0.24.1
+>=symengine-0.4.0
+```
+
 ## Installation
 
 Installation is simply:
@@ -32,17 +39,15 @@ $ pip install git+https://github.com/mjenior/riptide
 ## Usage
 
 ```python
-import riptide
+from riptide import *
 
 my_model = cobra.io.read_sbml_model('examples/genre.sbml')
 
-<<<<<<< Updated upstream
 transcript_abundances_1 = riptide.read_transcription_file(read_abundances_file='examples/transcriptome1.tsv')
 transcript_abundances_2 = riptide.read_transcription_file(read_abundances_file='examples/transcriptome2.tsv')
-=======
+
 transcript_abundances_1 = riptide.read_transcription_file('examples/transcriptome1.tsv')
 transcript_abundances_2 = riptide.read_transcription_file('examples/transcriptome2.tsv', replicates=True)
->>>>>>> Stashed changes
 
 riptide_object_1 = riptide.contextualize(model=my_model, transcription=transcript_abundances_1)
 riptide_object_2 = riptide.contextualize(model=my_model, transcription=transcript_abundances_2)
@@ -105,7 +110,7 @@ Metabolites pruned to 289 from 1134 (74.51% change)
 Flux through the objective DECREASED to ~76.48 from ~89.77 (14.8% change)
 Solution space volume DECREASED to ~1785.89 from ~8460.51 (78.89% change)
 
-RIPTiDe completed in 2 minutes and 41 seconds
+RIPTiDe completed in 1 minutes and 13 seconds
 
 ```
 

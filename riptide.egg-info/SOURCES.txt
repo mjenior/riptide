@@ -3,7 +3,6 @@ MANIFEST.in
 README.md
 setup.py
 riptide/__init__.py
-riptide/gapsplit.py
 riptide/riptide.py
 riptide.egg-info/PKG-INFO
 riptide.egg-info/SOURCES.txt
