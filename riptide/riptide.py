@@ -172,7 +172,7 @@ def _assign_coefficients(raw_transcription_dict, model, percentiles, min_coeffic
     
     # Screen transcript distribution by newly defined abundance intervals
     coefficient_dict = {}
-    for gene in transcription_dict.iterkeys():
+    for gene in transcription_dict.keys():
         transcription = transcription_dict[gene]
         if transcription in abund_cutoffs:
             index = abund_cutoffs.index(transcription)
@@ -338,7 +338,7 @@ def _calculate_polytope_volume(model, fraction):
 
     # Compile a list of radii from flux ranges
     radii = []
-    for rxn in bounds.iterkeys():
+    for rxn in bounds.keys():
         if bounds[rxn] == [0.0, 0.0]:
             continue
         else:
