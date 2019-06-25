@@ -8,13 +8,13 @@ with open('README.md', 'r') as readme:
 
 setuptools.setup(
 	name='riptide',
-	version='1.9', 
+	version='2.0', 
 	description='Reaction Inclusion by Parsimony and Transcript Distribution (RIPTiDe)',
 	author='Matthew Jenior',
 	author_email='mattjenior@gmail.com',
 	url='https://github.com/mjenior/riptide',
 	packages=setuptools.find_packages(),
-    install_requires=['cobra','symengine'],
+    install_requires=['cobra','symengine','pandas'],
     license='MIT',
     long_description_content_type='text/markdown',
     long_description=long_description,

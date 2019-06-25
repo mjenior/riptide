@@ -167,7 +167,7 @@ def _assign_coefficients(raw_transcription_dict, model, percentiles, min_coeffic
             continue
     
     # Calculate transcript abundance cutoffs
-    distribution = transcription_dict.values()
+    distribution = list(transcription_dict.values())
     abund_cutoffs = [numpy.percentile(distribution, x) for x in percentiles]
     
     # Screen transcript distribution by newly defined abundance intervals
@@ -233,7 +233,7 @@ def _constrain_and_analyze_model(model, coefficient_dict, fraction, sampling_dep
                 pfba_expr += coefficient_dict[rxn.id] * rxn.forward_variable
                 pfba_expr += coefficient_dict[rxn.id] * rxn.reverse_variable
         else:
-            coeff_range = float(max(coefficient_dict.values())) + float(min(coefficient_dict.values()))
+            coeff_range = float(max(list(coefficient_dict.values()))) + float(min(list(coefficient_dict.values())))
             for rxn in constrained_model.reactions:
                 max_coeff = coeff_range - float(coefficient_dict[rxn.id])
                 pfba_expr += max_coeff * rxn.forward_variable
