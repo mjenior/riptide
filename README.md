@@ -28,12 +28,12 @@ Keaty TC and Jensen PA (2019). gapsplit: Efficient random sampling for non-conve
 
 Installation is simply:
 ```
-$ pip install riptide
+$ pip3 install riptide
 ```
 
 Or from github:
 ```
-$ pip install git+https://github.com/mjenior/riptide
+$ pip3 install git+https://github.com/mjenior/riptide
 ```
 
 ## Usage
@@ -108,9 +108,8 @@ Sampling context-specific flux distributions...
 Reactions pruned to 291 from 1129 (74.22% change)
 Metabolites pruned to 289 from 1134 (74.51% change)
 Flux through the objective DECREASED to ~76.48 from ~89.77 (14.8% change)
-Solution space volume DECREASED to ~1785.89 from ~8460.51 (78.89% change)
 
-RIPTiDe completed in 1 minutes and 13 seconds
+RIPTiDe completed in 10 seconds
 
 ```
 
@@ -120,7 +119,6 @@ RIPTiDe completed in 1 minutes and 13 seconds
 - **transcriptome** - dictionary of transcriptomic abundances provded by user
 - **coefficients** - dictionary of linear coefficients assigned to each reaction based on transcript values
 - **fluxes** - Flux sampling or flux variability analysis pandas object
-- **flux_type** - Type of flux analysis performed
 - **quantile_range** - percentile intervals by which to parse transcript abundance distribution
 - **linear_coefficient_range** - linear coeeficients assigned to corresponding quantile
 - **fraction_of_optimum** - minimum specified percentage of optimal objective flux during contextualization
