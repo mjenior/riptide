@@ -21,7 +21,6 @@ class riptideClass:
         self.transcriptome = 'NULL'
         self.coefficients = 'NULL'
         self.fluxes = 'NULL'
-        self.flux_type = 'NULL'
         self.quantile_range = 'NULL'
         self.linear_coefficient_range = 'NULL'
         self.fraction_of_optimum = 'NULL'
@@ -90,7 +89,6 @@ def contextualize(model, transcription, defined = False, samples = 500, percenti
     print('\nInitializing model and integrating transcriptomic data...')
     riptide_model = copy.deepcopy(model)
     riptide_model.id = str(riptide_model.id) + '_riptide'
-    orig_volume = _calculate_polytope_volume(riptide_model, fraction)
     coefficient_dict = _assign_coefficients(transcription, riptide_model, percentiles, coefficients)
     riptide_object.coefficients = coefficient_dict
 
@@ -98,21 +96,18 @@ def contextualize(model, transcription, defined = False, samples = 500, percenti
     print('Pruning zero flux subnetworks...')
     rm_rxns = _constrain_and_analyze_model(riptide_model, coefficient_dict, fraction, 'minimization')
     riptide_model = _prune_model(riptide_model, rm_rxns, defined, conservative)
-    new_volume = _calculate_polytope_volume(riptide_model, fraction)
 
     # Find optimal solution space based on transcription and final constraints
     if samples != 0:
-        print('Sampling context-specific flux distributions...')
-        flux_object, flux_type = _constrain_and_analyze_model(riptide_model, coefficient_dict, fraction, samples)
+        print('Sampling context-specific flux distributions (longest step)...')
+        flux_object = _constrain_and_analyze_model(riptide_model, coefficient_dict, fraction, samples)
         riptide_object.model = riptide_model
         riptide_object.fluxes = flux_object
-        riptide_object.flux_type = flux_type
     else:
         riptide_object.model = riptide_model
-        riptide_object.flux_type = flux_type
 
     # Analyze changes introduced by RIPTiDe and return results
-    _operation_report(start_time, model, riptide_model, orig_volume, new_volume)    
+    _operation_report(start_time, model, riptide_model)    
     return riptide_object
 
 
@@ -256,17 +251,15 @@ def _constrain_and_analyze_model(model, coefficient_dict, fraction, sampling_dep
         else:        
             # Explore solution space of constrained model with flux sampling, allow deviation
             constrained_model.objective = constrained_model.problem.Objective(pfba_expr, direction='max', sloppy=True)
-            solution = constrained_model.optimize()
-            flux_sum_obj_val = solution.objective_value
+            flux_sum_obj_val = constrained_model.slim_optimize()
             flux_sum_constraint = constrained_model.problem.Constraint(pfba_expr, lb=flux_sum_obj_val*fraction, ub=flux_sum_obj_val)
             constrained_model.add_cons_vars([flux_sum_constraint])
             constrained_model.solver.update()
             
-            # Perform flux sampling (or FVA)
-            flux_object, flux_type = _explore_flux_ranges(constrained_model, sampling_depth, fraction)
+            # Perform flux sampling
+            flux_object = _gapsplit(constrained_model, sampling_depth)
 
-            return flux_object, flux_type
-    
+            return flux_object
 
 # Prune model based on blocked reactions from minimization as well as user-defined reactions
 def _prune_model(new_model, rm_rxns, defined_rxns, conserve):
@@ -314,46 +307,8 @@ def _prune_model(new_model, rm_rxns, defined_rxns, conserve):
     return new_model
 
 
-# Analyze the possible ranges of flux in the constrained model
-def _explore_flux_ranges(model, samples, fraction):
-    
-    try:
-        flux_object = _gapsplit(model, samples) 
-        analysis = 'flux_sampling'
-    except:
-        # Handle errors for models that are now too small
-        print('Constrained solution space too narrow for sampling, performing FVA instead')        
-        flux_object = flux_variability_analysis(model, fraction_of_optimum=fraction)
-        analysis = 'fva'
-        
-    return flux_object, analysis
-  
-
-# Calculate approximate volume of solution space, treated as ellipsoid
-def _calculate_polytope_volume(model, fraction):
-    
-    flux_span = flux_variability_analysis(model, fraction_of_optimum=fraction)
-    bounds = {}
-    for rxn_id, min_max in flux_span.iterrows(): bounds[rxn_id] = [min(min_max), max(min_max)]
-
-    # Compile a list of radii from flux ranges
-    radii = []
-    for rxn in bounds.keys():
-        if bounds[rxn] == [0.0, 0.0]:
-            continue
-        else:
-            diameter = abs(bounds[rxn][0]) + abs(bounds[rxn][1])
-            radii.append(numpy.median(diameter) / 2.0)
-    
-    # Calculate volume 
-    volume = (4.0/3.0) * numpy.pi * max(radii) * numpy.median(radii) * min(radii)
-    volume = round(volume, 3)
-    
-    return volume
-
-
 # Reports how long RIPTiDe took to run
-def _operation_report(start_time, model, riptide, old_vol, new_vol):
+def _operation_report(start_time, model, riptide):
     
     # Pruning
     perc_removal = 100.0 - ((float(len(riptide.reactions)) / float(len(model.reactions))) * 100.0)
@@ -366,7 +321,7 @@ def _operation_report(start_time, model, riptide, old_vol, new_vol):
     # Flux through objective
     new_ov = round(riptide.slim_optimize(), 2)
     old_ov = round(model.slim_optimize(), 2)
-    per_shift = 100.0 - ((new_ov / old_ov) * 100.0)
+    per_shift = 100.0 - ((float(new_ov) / float(old_ov)) * 100.0)
     if per_shift == 0.0:
         pass
     elif per_shift > 0.0:
@@ -375,19 +330,6 @@ def _operation_report(start_time, model, riptide, old_vol, new_vol):
     elif per_shift < 0.0:
         per_shift = round(abs(per_shift), 2)
         print('Flux through the objective INCREASED to ~' + str(new_ov) + ' from ' + str(old_ov) + ' (' + str(per_shift) + '% change)')
-    
-    # Solution space volume
-    vol_shift = 100.0 - ((new_vol / old_vol) * 100.0)
-    new_vol = round(new_vol, 2)
-    old_vol = round(old_vol, 2)
-    if new_vol > 100000 or old_vol > 100000:
-        pass
-    elif vol_shift < 0.0:
-        vol_shift = round(abs(vol_shift), 2)
-        print('Solution space volume INCREASED to ~' + str(new_vol) + ' from ~' + str(old_vol) + ' (' + str(vol_shift) + '% change)')
-    elif vol_shift > 0.0:
-        vol_shift = round(vol_shift, 2)
-        print('Solution space volume DECREASED to ~' + str(new_vol) + ' from ~' + str(old_vol) + ' (' + str(vol_shift) + '% change)')
     
     # Check that prune model can still achieve flux through the objective (just in case)
     if riptide.slim_optimize() < 1e-6 or str(riptide.slim_optimize()) == 'nan':
@@ -490,7 +432,7 @@ def _gapsplit(
 
     # only split reactions with feasible range >= min_range
     idxs = (fva.maximum - fva.minimum >= min_range).to_numpy().nonzero()[0]
-    weights = (1/(fva.maximum - fva.minimum)**2).to_numpy()
+    weights = (1.0/(fva.maximum - fva.minimum)**2).to_numpy()
 
     report("Targeting {}/{} unblocked primary variables.".format(len(idxs), len(model.reactions)))
     report("Targeting {} secondary variables.".format(n_secondary))
@@ -538,7 +480,7 @@ def _gapsplit(
             k += 1
             if k % report_interval == 0:
                 elapsed = time.time() - start_time
-                remaining = elapsed / k * (n - k)
+                remaining = float(elapsed) / float(k) * (float(n - k))
                 report(report_format.format(
                         i=k, n=n, cov=100*(1-numpy.mean(relative)),
                         min=numpy.min(relative), med=numpy.median(relative),
@@ -563,21 +505,7 @@ def _generate_sample(
     with model:
         model.reactions[primary_var].lower_bound = primary_lb
         model.reactions[primary_var].upper_bound = primary_ub
-
-        if secondary_vars is not None:
-            quad_exp = 0
-            for i, sec in enumerate(secondary_vars):
-                diff = model.problem.Variable('difference_{}'.format(sec))
-                cons = model.problem.Constraint(
-                    model.reactions[sec].flux_expression - diff,
-                    lb=secondary_targets[i], ub=secondary_targets[i])
-                model.add_cons_vars([diff, cons])
-                quad_exp += secondary_weights[i] * diff**2
-            quad_obj = model.problem.Objective(quad_exp, direction='min')
-            model.objective = quad_obj
-        else:
-            model.objective = model.problem.Objective(0)
-
+        model.objective = model.problem.Objective(0)
         solution = model.optimize()
         if solution.status != 'optimal':
             return None
@@ -600,8 +528,9 @@ def _maxgap(points, fva=None):
     left = numpy.zeros(width.size)
     for i in range(width.size):
         left[i] = points[loc[i],i]
+
     relative = width / (points[-1,:] - points[0,:])
-    target = left + width/2
+    target = left + width / 2.0
 
     return relative, target, width
 
