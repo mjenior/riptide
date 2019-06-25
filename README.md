@@ -13,11 +13,12 @@ Jenior ML, Moutinho TJ, and Papin JA. (2019). Parsimonious transcript data integ
 
 Utilizes python implementation of the gapsplit flux sampler. Please also cite:
 ```
-Keaty TC and Jensen PA (2019). gapsplit: Efficient random sampling for non-convex constraint-based models. bioRxiv 652917; doi: https://doi.org/10.1101/652917 
+Keaty TC and Jensen PA (2019). gapsplit: Efficient random sampling for non-convex constraint-based models. bioRxiv 652917; doi: https://doi.org/10.1101/652917
 ```
 
 ## Dependencies
 ```
+>=python-3.6.4
 >=cobra-0.15.3
 >=pandas-0.24.1
 >=symengine-0.4.0
