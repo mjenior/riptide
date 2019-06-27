@@ -29,13 +29,13 @@ class riptideClass:
 
 
 # Create context-specific model based on transcript distribution
-def contextualize(model, transcription, defined = False, samples = 0, percentiles = [50.0, 62.5, 75.0, 87.5], 
+def contextualize(model, transcription, defined = False, samples = 500, percentiles = [50.0, 62.5, 75.0, 87.5], 
             coefficients = [1.0, 0.5, 0.1, 0.01, 0.001], fraction = 0.75, conservative = False):
     '''Reaction Inclusion by Parsimony and Transcriptomic Distribution or RIPTiDe
     
     Creates a contextualized metabolic model based on parsimonious usage of reactions defined
     by their associated transcriptomic abundances. Returns a pruned, context-specific cobra.Model 
-    and a pandas.DataFrame of associated flux sampling distributions
+    and a pandas.DataFrame of associated flux analysis
 
     Parameters
     ----------
@@ -47,7 +47,7 @@ def contextualize(model, transcription, defined = False, samples = 0, percentile
         Text file containing reactions IDs for forced inclusion listed on the first line and exclusion 
         listed on the second line (both .csv and .tsv formats supported)
     samples : int 
-        Number of flux samples to collect, default is 0, If 0, sampling skipped
+        Number of flux samples to collect, default is 500. If 0, sampling skipped FVA used instead
     percentiles : list
         Percentile cutoffs of transcript abundance for linear coefficient assignments to associated reactions
         Default is [50.0, 62.5, 75.0, 87.5]
@@ -110,7 +110,7 @@ def contextualize(model, transcription, defined = False, samples = 0, percentile
     riptide_object.fluxes = flux_object
 
     # Analyze changes introduced by RIPTiDe and return results
-    _operation_report(start_time, model, riptide_model)    
+    _operation_report(start_time, model, riptide_model)
     return riptide_object
 
 
