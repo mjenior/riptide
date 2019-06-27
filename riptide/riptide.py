@@ -21,6 +21,7 @@ class riptideClass:
         self.model = 'NULL'
         self.transcriptome = 'NULL'
         self.coefficients = 'NULL'
+        self.flux_analysis = 'NULL'
         self.fluxes = 'NULL'
         self.quantile_range = 'NULL'
         self.linear_coefficient_range = 'NULL'
@@ -84,6 +85,10 @@ def contextualize(model, transcription, defined = False, samples = 0, percentile
     riptide_object.linear_coefficient_range = coefficients
     riptide_object.fraction_of_optimum = fraction
     riptide_object.transcriptome = transcription
+    if samples > 0:
+    	riptide_object.flux_analysis = 'Flux sampling'
+    else:
+    	riptide_object.flux_analysis = 'FVA'
 
     # Check original model functionality
     # Partition reactions based on transcription percentile intervals, assign corresponding reaction coefficients
@@ -97,15 +102,12 @@ def contextualize(model, transcription, defined = False, samples = 0, percentile
     print('Pruning zero flux subnetworks...')
     rm_rxns = _constrain_and_analyze_model(riptide_model, coefficient_dict, fraction, 'minimization')
     riptide_model = _prune_model(riptide_model, rm_rxns, defined, conservative)
+    riptide_object.model = riptide_model
 
     # Find optimal solution space based on transcription and final constraints
-    if samples != 0:
-        print('Sampling context-specific flux distributions...')
-        flux_object = _constrain_and_analyze_model(riptide_model, coefficient_dict, fraction, samples)
-        riptide_object.model = riptide_model
-        riptide_object.fluxes = flux_object
-    else:
-        riptide_object.model = riptide_model
+    print('Exploring context-specific flux distributions...')
+    flux_object = _constrain_and_analyze_model(riptide_model, coefficient_dict, fraction, samples)
+    riptide_object.fluxes = flux_object
 
     # Analyze changes introduced by RIPTiDe and return results
     _operation_report(start_time, model, riptide_model)    
@@ -258,10 +260,13 @@ def _constrain_and_analyze_model(model, coefficient_dict, fraction, sampling_dep
             constrained_model.add_cons_vars([flux_sum_constraint])
             constrained_model.solver.update()
             
-            # Perform flux sampling
-            warnings.filterwarnings("ignore") # Handle uninformative infeasible warning
-            flux_object = _gapsplit(constrained_model, n=sampling_depth)
-            warnings.filterwarnings("default")
+            if sampling_depth > 0:
+            	# Perform flux sampling
+            	warnings.filterwarnings("ignore") # Handle uninformative infeasible warning
+            	flux_object = _gapsplit(constrained_model, n=sampling_depth)
+            	warnings.filterwarnings("default")
+            else:
+            	flux_object = flux_variability_analysis(constrained_model, fraction_of_optimum=fraction)
 
             return flux_object
 
@@ -427,7 +432,7 @@ def _gapsplit(
     reactions = model.reactions
 
     report("Calculating feasible ranges using FVA.")
-    fva = cobra.flux_analysis.flux_variability_analysis(model, reactions, fraction_of_optimum=0.0)
+    fva = flux_variability_analysis(model, reactions, fraction_of_optimum=0.0)
 
     if secondary_frac >= 1.0:
         n_secondary = secondary_frac

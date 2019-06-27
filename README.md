@@ -28,12 +28,12 @@ Keaty TC and Jensen PA (2019). gapsplit: Efficient random sampling for non-conve
 
 Installation is simply:
 ```
-$ pip3 install riptide
+$ pip install riptide
 ```
 
 Or from github:
 ```
-$ pip3 install git+https://github.com/mjenior/riptide
+$ pip install git+https://github.com/mjenior/riptide
 ```
 
 ## Usage
@@ -49,7 +49,8 @@ transcript_abundances_2 = riptide.read_transcription_file(read_abundances_file='
 transcript_abundances_1 = riptide.read_transcription_file('examples/transcriptome1.tsv')
 transcript_abundances_2 = riptide.read_transcription_file('examples/transcriptome2.tsv', replicates=True)
 
-riptide_object_1 = riptide.contextualize(model=my_model, transcription=transcript_abundances_1)
+riptide_object_1_a = riptide.contextualize(model=my_model, transcription=transcript_abundances_1)
+riptide_object_1_b = riptide.contextualize(model=my_model, transcription=transcript_abundances_1, defined='examples/defined.tsv')
 riptide_object_2 = riptide.contextualize(model=my_model, transcription=transcript_abundances_2)
 ``` 
 
@@ -80,7 +81,7 @@ defined : False or File
     Text file containing reactions IDs for forced inclusion listed on the first line and exclusion 
     listed on the second line (both .csv and .tsv formats supported)
 samples : int 
-    Number of flux samples to collect, default is 500, If 0, sampling skipped
+    Number of flux samples to collect, default is 0 and FVA performed
 percentiles : list of floats
     Percentile cutoffs of transcript abundance for linear coefficient assignments to associated reactions
     Default is [50.0, 62.5, 75.0, 87.5]
@@ -103,7 +104,7 @@ bound : bool
 
 Initializing model and parsing transcriptome...
 Pruning zero flux subnetworks...
-Sampling context-specific flux distributions...
+Exploring context-specific flux distributions...
 
 Reactions pruned to 291 from 1129 (74.22% change)
 Metabolites pruned to 289 from 1134 (74.51% change)
@@ -118,6 +119,7 @@ RIPTiDe completed in 15 seconds
 - **model** - contextualized genome-scale metabolic network reconstruction
 - **transcriptome** - dictionary of transcriptomic abundances provded by user
 - **coefficients** - dictionary of linear coefficients assigned to each reaction based on transcript values
+- **flux_analysis** - string denoting type of flux analysis performed - FVA or Flux sampling
 - **fluxes** - Flux sampling or flux variability analysis pandas object
 - **quantile_range** - percentile intervals by which to parse transcript abundance distribution
 - **linear_coefficient_range** - linear coeeficients assigned to corresponding quantile
