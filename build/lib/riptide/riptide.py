@@ -28,7 +28,7 @@ class riptideClass:
 
 
 # Create context-specific model based on transcript distribution
-def contextualize(model, transcription, defined = False, samples = 500, percentiles = [50.0, 62.5, 75.0, 87.5], 
+def contextualize(model, transcription, defined = False, samples = 0, percentiles = [50.0, 62.5, 75.0, 87.5], 
             coefficients = [1.0, 0.5, 0.1, 0.01, 0.001], fraction = 0.75, conservative = False):
     '''Reaction Inclusion by Parsimony and Transcriptomic Distribution or RIPTiDe
     
@@ -46,7 +46,7 @@ def contextualize(model, transcription, defined = False, samples = 500, percenti
         Text file containing reactions IDs for forced inclusion listed on the first line and exclusion 
         listed on the second line (both .csv and .tsv formats supported)
     samples : int 
-        Number of flux samples to collect, default is 500, If 0, sampling skipped
+        Number of flux samples to collect, default is 0, If 0, sampling skipped
     percentiles : list
         Percentile cutoffs of transcript abundance for linear coefficient assignments to associated reactions
         Default is [50.0, 62.5, 75.0, 87.5]
@@ -239,6 +239,7 @@ def _constrain_and_analyze_model(model, coefficient_dict, fraction, sampling_dep
         prev_obj_val = constrained_model.slim_optimize()
         prev_obj_constraint = constrained_model.problem.Constraint(constrained_model.objective.expression, lb=prev_obj_val*fraction, ub=prev_obj_val)
         constrained_model.add_cons_vars([prev_obj_constraint])
+        constrained_model.solver.update()
 
         if sampling_depth == 'minimization':
             # Determine reactions that do not carry any flux in the constrained model
@@ -259,7 +260,7 @@ def _constrain_and_analyze_model(model, coefficient_dict, fraction, sampling_dep
             
             # Perform flux sampling
             warnings.filterwarnings("ignore") # Handle uninformative infeasible warning
-            flux_object = _gapsplit(constrained_model, sampling_depth)
+            flux_object = _gapsplit(constrained_model, n=sampling_depth)
             warnings.filterwarnings("default")
 
             return flux_object
@@ -508,7 +509,7 @@ def _generate_sample(
     with model:
         model.reactions[primary_var].lower_bound = primary_lb
         model.reactions[primary_var].upper_bound = primary_ub
-        model.objective = model.problem.Objective(0)
+        #model.objective = model.problem.Objective(0)
         solution = model.optimize()
         if solution.status != 'optimal':
             return None

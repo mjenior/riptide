@@ -80,7 +80,7 @@ defined : False or File
     Text file containing reactions IDs for forced inclusion listed on the first line and exclusion 
     listed on the second line (both .csv and .tsv formats supported)
 samples : int 
-    Number of flux samples to collect, default is 10000, If 0, sampling skipped
+    Number of flux samples to collect, default is 500, If 0, sampling skipped
 percentiles : list of floats
     Percentile cutoffs of transcript abundance for linear coefficient assignments to associated reactions
     Default is [50.0, 62.5, 75.0, 87.5]
