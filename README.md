@@ -89,7 +89,7 @@ coefficients : list of floats
     Default is [1.0, 0.5, 0.1, 0.01, 0.001]
 fraction : float
     Minimum percent of optimal objective value during FBA steps
-    Default is 0.8
+    Default is 0.75
 conservative : bool
     Conservatively remove inactive reactions based on genes
     Default is False
@@ -109,7 +109,7 @@ Reactions pruned to 291 from 1129 (74.22% change)
 Metabolites pruned to 289 from 1134 (74.51% change)
 Flux through the objective DECREASED to ~76.48 from ~89.77 (14.8% change)
 
-RIPTiDe completed in 10 seconds
+RIPTiDe completed in 15 seconds
 
 ```
 

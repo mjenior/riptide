@@ -7,6 +7,7 @@ import numpy
 import cobra
 import pandas
 import bisect
+import warnings
 import symengine
 from cobra.util import solver
 from optlang.symbolics import Zero
@@ -28,7 +29,7 @@ class riptideClass:
 
 # Create context-specific model based on transcript distribution
 def contextualize(model, transcription, defined = False, samples = 500, percentiles = [50.0, 62.5, 75.0, 87.5], 
-            coefficients = [1.0, 0.5, 0.1, 0.01, 0.001], fraction = 0.8, conservative = False):
+            coefficients = [1.0, 0.5, 0.1, 0.01, 0.001], fraction = 0.75, conservative = False):
     '''Reaction Inclusion by Parsimony and Transcriptomic Distribution or RIPTiDe
     
     Creates a contextualized metabolic model based on parsimonious usage of reactions defined
@@ -233,31 +234,33 @@ def _constrain_and_analyze_model(model, coefficient_dict, fraction, sampling_dep
                 max_coeff = coeff_range - float(coefficient_dict[rxn.id])
                 pfba_expr += max_coeff * rxn.forward_variable
                 pfba_expr += max_coeff * rxn.reverse_variable
-                
-        # Calculate sum of fluxes constraint
+        
+        # Set previous objective as a constraint, allow deviation
+        prev_obj_val = constrained_model.slim_optimize()
+        prev_obj_constraint = constrained_model.problem.Constraint(constrained_model.objective.expression, lb=prev_obj_val*fraction, ub=prev_obj_val)
+        constrained_model.add_cons_vars([prev_obj_constraint])
+
         if sampling_depth == 'minimization':
-            prev_obj_val = constrained_model.slim_optimize()
-            # Set previous objective as a constraint, allow deviation
-            prev_obj_constraint = constrained_model.problem.Constraint(constrained_model.objective.expression, lb=prev_obj_val*fraction, ub=prev_obj_val)
-            constrained_model.add_cons_vars([prev_obj_constraint])
+            # Determine reactions that do not carry any flux in the constrained model
             constrained_model.objective = constrained_model.problem.Objective(pfba_expr, direction='min', sloppy=True)
             constrained_model.solver.update()
             solution = constrained_model.optimize()
-            
-            # Determine reactions that do not carry any flux in the constrained model
             inactive_rxns = set([rxn.id for rxn in constrained_model.reactions if abs(solution.fluxes[rxn.id]) < 1e-6])
             return inactive_rxns
         
-        else:        
+        else:
             # Explore solution space of constrained model with flux sampling, allow deviation
             constrained_model.objective = constrained_model.problem.Objective(pfba_expr, direction='max', sloppy=True)
+            constrained_model.solver.update()
             flux_sum_obj_val = constrained_model.slim_optimize()
             flux_sum_constraint = constrained_model.problem.Constraint(pfba_expr, lb=flux_sum_obj_val*fraction, ub=flux_sum_obj_val)
             constrained_model.add_cons_vars([flux_sum_constraint])
             constrained_model.solver.update()
             
             # Perform flux sampling
+            warnings.filterwarnings("ignore") # Handle uninformative infeasible warning
             flux_object = _gapsplit(constrained_model, sampling_depth)
+            warnings.filterwarnings("default")
 
             return flux_object
 

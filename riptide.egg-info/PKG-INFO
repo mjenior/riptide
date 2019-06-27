@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: riptide
-Version: 2.0
+Version: 2.0.1
 Summary: Reaction Inclusion by Parsimony and Transcript Distribution (RIPTiDe)
 Home-page: https://github.com/mjenior/riptide
 Author: Matthew Jenior
@@ -36,12 +36,12 @@ Description: # RIPTiDe
         
         Installation is simply:
         ```
-        $ pip install riptide
+        $ pip3 install riptide
         ```
         
         Or from github:
         ```
-        $ pip install git+https://github.com/mjenior/riptide
+        $ pip3 install git+https://github.com/mjenior/riptide
         ```
         
         ## Usage
@@ -97,7 +97,7 @@ Description: # RIPTiDe
             Default is [1.0, 0.5, 0.1, 0.01, 0.001]
         fraction : float
             Minimum percent of optimal objective value during FBA steps
-            Default is 0.8
+            Default is 0.75
         conservative : bool
             Conservatively remove inactive reactions based on genes
             Default is False
@@ -116,9 +116,8 @@ Description: # RIPTiDe
         Reactions pruned to 291 from 1129 (74.22% change)
         Metabolites pruned to 289 from 1134 (74.51% change)
         Flux through the objective DECREASED to ~76.48 from ~89.77 (14.8% change)
-        Solution space volume DECREASED to ~1785.89 from ~8460.51 (78.89% change)
         
-        RIPTiDe completed in 1 minutes and 13 seconds
+        RIPTiDe completed in 15 seconds
         
         ```
         
@@ -128,7 +127,6 @@ Description: # RIPTiDe
         - **transcriptome** - dictionary of transcriptomic abundances provded by user
         - **coefficients** - dictionary of linear coefficients assigned to each reaction based on transcript values
         - **fluxes** - Flux sampling or flux variability analysis pandas object
-        - **flux_type** - Type of flux analysis performed
         - **quantile_range** - percentile intervals by which to parse transcript abundance distribution
         - **linear_coefficient_range** - linear coeeficients assigned to corresponding quantile
         - **fraction_of_optimum** - minimum specified percentage of optimal objective flux during contextualization
