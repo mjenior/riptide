@@ -26,7 +26,7 @@ Keaty TC and Jensen PA (2019). gapsplit: Efficient random sampling for non-conve
 
 ## Installation
 
-Installation is simply:
+Installation is:
 ```
 $ pip install riptide
 ```

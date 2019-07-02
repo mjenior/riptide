@@ -515,6 +515,7 @@ def _generate_sample(
         model.reactions[primary_var].lower_bound = primary_lb
         model.reactions[primary_var].upper_bound = primary_ub
         #model.objective = model.problem.Objective(0)
+        model.objective = Zero
         solution = model.optimize()
         if solution.status != 'optimal':
             return None

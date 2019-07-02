@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: riptide
-Version: 2.0.4
+Version: 2.0.5
 Summary: Reaction Inclusion by Parsimony and Transcript Distribution (RIPTiDe)
 Home-page: https://github.com/mjenior/riptide
 Author: Matthew Jenior
@@ -34,7 +34,7 @@ Description: # RIPTiDe
         
         ## Installation
         
-        Installation is simply:
+        Installation is:
         ```
         $ pip install riptide
         ```
