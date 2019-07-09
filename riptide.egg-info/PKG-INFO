@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: riptide
-Version: 2.0.5
+Version: 2.0.6
 Summary: Reaction Inclusion by Parsimony and Transcript Distribution (RIPTiDe)
 Home-page: https://github.com/mjenior/riptide
 Author: Matthew Jenior
@@ -105,6 +105,9 @@ Description: # RIPTiDe
         bound : bool
             Bounds each reaction based on transcriptomic constraints
             Default is False
+        objective : bool
+            Sets previous objective function as a constraint with minimum flux equal to user input fraction
+            Default is True
         ```
         
         ### Example stdout report:

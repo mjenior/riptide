@@ -97,6 +97,9 @@ conservative : bool
 bound : bool
     Bounds each reaction based on transcriptomic constraints
     Default is False
+objective : bool
+    Sets previous objective function as a constraint with minimum flux equal to user input fraction
+    Default is True
 ```
 
 ### Example stdout report:

@@ -30,7 +30,7 @@ class riptideClass:
 
 # Create context-specific model based on transcript distribution
 def contextualize(model, transcription, defined = False, samples = 500, percentiles = [50.0, 62.5, 75.0, 87.5], 
-            coefficients = [1.0, 0.5, 0.1, 0.01, 0.001], fraction = 0.75, conservative = False):
+            coefficients = [1.0, 0.5, 0.1, 0.01, 0.001], fraction = 0.75, conservative = False, objective = True):
     '''Reaction Inclusion by Parsimony and Transcriptomic Distribution or RIPTiDe
     
     Creates a contextualized metabolic model based on parsimonious usage of reactions defined
@@ -60,6 +60,9 @@ def contextualize(model, transcription, defined = False, samples = 500, percenti
     conservative : bool
         Conservatively remove inactive reactions based on genes
         Default is False
+    objective : bool
+		Sets previous objective function as a constraint with minimum flux equal to user input fraction
+    	Default is True
     '''
 
     start_time = time.time()
@@ -100,13 +103,13 @@ def contextualize(model, transcription, defined = False, samples = 500, percenti
 
     # Prune now inactive network sections based on coefficients
     print('Pruning zero flux subnetworks...')
-    rm_rxns = _constrain_and_analyze_model(riptide_model, coefficient_dict, fraction, 'minimization')
+    rm_rxns = _constrain_and_analyze_model(riptide_model, coefficient_dict, fraction, 'minimization', objective)
     riptide_model = _prune_model(riptide_model, rm_rxns, defined, conservative)
     riptide_object.model = riptide_model
 
     # Find optimal solution space based on transcription and final constraints
     print('Exploring context-specific flux distributions...')
-    flux_object = _constrain_and_analyze_model(riptide_model, coefficient_dict, fraction, samples)
+    flux_object = _constrain_and_analyze_model(riptide_model, coefficient_dict, fraction, samples, objective)
     riptide_object.fluxes = flux_object
 
     # Analyze changes introduced by RIPTiDe and return results
@@ -220,7 +223,7 @@ def _incorporate_user_defined_reactions(rm_rxns, reaction_file):
 
 
 # Determine those reactions that carry flux in a pFBA objective set to a threshold of maximum
-def _constrain_and_analyze_model(model, coefficient_dict, fraction, sampling_depth):
+def _constrain_and_analyze_model(model, coefficient_dict, fraction, sampling_depth, objective):
     
     with model as constrained_model:
 
@@ -238,10 +241,11 @@ def _constrain_and_analyze_model(model, coefficient_dict, fraction, sampling_dep
                 pfba_expr += max_coeff * rxn.reverse_variable
         
         # Set previous objective as a constraint, allow deviation
-        prev_obj_val = constrained_model.slim_optimize()
-        prev_obj_constraint = constrained_model.problem.Constraint(constrained_model.objective.expression, lb=prev_obj_val*fraction, ub=prev_obj_val)
-        constrained_model.add_cons_vars([prev_obj_constraint])
-        constrained_model.solver.update()
+        if objective == True:
+        	prev_obj_val = constrained_model.slim_optimize()
+        	prev_obj_constraint = constrained_model.problem.Constraint(constrained_model.objective.expression, lb=prev_obj_val*fraction, ub=prev_obj_val)
+        	constrained_model.add_cons_vars([prev_obj_constraint])
+        	constrained_model.solver.update()
 
         if sampling_depth == 'minimization':
             # Determine reactions that do not carry any flux in the constrained model
