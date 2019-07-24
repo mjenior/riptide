@@ -98,22 +98,20 @@ def contextualize(model, transcription, defined = False, samples = 500, percenti
     riptide_model = copy.deepcopy(model)
     riptide_model.id = str(riptide_model.id) + '_riptide'
 
-    # remove totally blocked reactions to speed yp subsequent sections
+    # Remove totally blocked reactions to speed up subsequent sections
     blocked_rxns = find_blocked_reactions(riptide_model)
     riptide_model = _prune_model(riptide_model, blocked_rxns, defined, conservative)
-
-
     coefficient_dict = _assign_coefficients(transcription, riptide_model, percentiles, coefficients)
     riptide_object.coefficients = coefficient_dict
 
     # Prune now inactive network sections based on coefficients
     print('Pruning zero flux subnetworks...')
-    iters = 50 # needs to scale with model size
+    iters = int(round(len(riptide_model.reactions) * 0.05))
+    rm_rxns = set([rxn.id for rxn in riptide_model.reactions])
     for x in range(1, iters):
-        rm_rxns = _constrain_and_analyze_model(riptide_model, coefficient_dict, fraction, 'minimization', objective)
-
-
-
+        riptide_model = copy.deepcopy(riptide_model)
+        curr_rxns = _constrain_and_analyze_model(riptide_model, coefficient_dict, fraction, 0, objective)
+        rm_rxns = rm_rxns.intersection(curr_rxns)
     riptide_model = _prune_model(riptide_model, rm_rxns, defined, conservative)
 
     # Find optimal solution space based on transcription and final constraints
@@ -262,7 +260,7 @@ def _constrain_and_analyze_model(model, coefficient_dict, fraction, sampling_dep
         	constrained_model.add_cons_vars([prev_obj_constraint])
         	constrained_model.solver.update()
 
-        if sampling_depth == 'minimization':
+        if sampling_depth == 0:
             # Determine reactions that do not carry any flux in the constrained model
             constrained_model.objective = constrained_model.problem.Objective(pfba_expr, direction='min', sloppy=True)
             constrained_model.solver.update()
