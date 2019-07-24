@@ -106,7 +106,7 @@ def contextualize(model, transcription, defined = False, samples = 500, percenti
 
     # Prune now inactive network sections based on coefficients
     print('Pruning zero flux subnetworks...')
-    iters = int(round(len(riptide_model.reactions) * 0.05))
+    iters = int(round(len(riptide_model.reactions) * 0.05)) # Adaptive to model size
     rm_rxns = set([rxn.id for rxn in riptide_model.reactions])
     for x in range(1, iters):
         riptide_model = copy.deepcopy(riptide_model)
@@ -374,7 +374,7 @@ def _operation_report(start_time, model, riptide):
         if riptide.slim_optimize() < 1e-6 or str(riptide.slim_optimize()) == 'nan':
             print('\nWARNING: Contextualized model objective can no longer carry flux')
     except:
-        continue
+        pass
     
     # Run time
     seconds = round(time.time() - start_time)

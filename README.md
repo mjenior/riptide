@@ -108,15 +108,15 @@ set_bounds : bool
 ### Example stdout report:
 ```
 
-Initializing model and parsing transcriptome...
+Initializing model and integrating transcriptomic data...
 Pruning zero flux subnetworks...
 Analyzing context-specific flux distributions...
 
-Reactions pruned to 291 from 1129 (74.22% change)
-Metabolites pruned to 289 from 1134 (74.51% change)
-Flux through the objective DECREASED to ~76.48 from ~89.77 (14.8% change)
+Reactions pruned to 274 from 1129 (75.73% change)
+Metabolites pruned to 279 from 1132 (75.35% change)
+Flux through the objective DECREASED to ~49.14 from ~65.43 (24.9% change)
 
-RIPTiDe completed in 15 seconds
+RIPTiDe completed in 36 seconds
 
 ```
 
