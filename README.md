@@ -100,6 +100,9 @@ bound : bool
 objective : bool
     Sets previous objective function as a constraint with minimum flux equal to user input fraction
     Default is True
+set_bounds : bool
+    Uses flax variability analysis results from constrained model to set new bounds for all equations
+    Default is True
 ```
 
 ### Example stdout report:
@@ -107,7 +110,7 @@ objective : bool
 
 Initializing model and parsing transcriptome...
 Pruning zero flux subnetworks...
-Exploring context-specific flux distributions...
+Analyzing context-specific flux distributions...
 
 Reactions pruned to 291 from 1129 (74.22% change)
 Metabolites pruned to 289 from 1134 (74.51% change)
@@ -119,14 +122,14 @@ RIPTiDe completed in 15 seconds
 
 ### Resulting RIPTiDe object (class) properties:
 
-- **model** - contextualized genome-scale metabolic network reconstruction
-- **transcriptome** - dictionary of transcriptomic abundances provded by user
-- **coefficients** - dictionary of linear coefficients assigned to each reaction based on transcript values
-- **flux_analysis** - string denoting type of flux analysis performed - FVA or Flux sampling
-- **fluxes** - Flux sampling or flux variability analysis pandas object
-- **quantile_range** - percentile intervals by which to parse transcript abundance distribution
-- **linear_coefficient_range** - linear coeeficients assigned to corresponding quantile
-- **fraction_of_optimum** - minimum specified percentage of optimal objective flux during contextualization
+- **model** - Contextualized genome-scale metabolic network reconstruction
+- **transcriptome** - Dictionary of transcriptomic abundances provded by user
+- **coefficients** - Dictionary of linear coefficients assigned to each reaction based on transcript values
+- **flux_samples** - Flux sampling pandas object from constrained model
+- **flux_variability** - Flux variability analysis pandas object from constrained model
+- **quantile_range** - Percentile intervals by which to parse transcript abundance distribution
+- **linear_coefficient_range** - Linear coeeficients assigned to corresponding quantile
+- **fraction_of_optimum** - Minimum specified percentage of optimal objective flux during contextualization
 
 
 ## Additional Information

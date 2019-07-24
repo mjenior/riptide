@@ -12,7 +12,7 @@ import symengine
 from cobra.util import solver
 from optlang.symbolics import Zero
 from cobra.manipulation.delete import remove_genes
-from cobra.flux_analysis import flux_variability_analysis
+from cobra.flux_analysis import flux_variability_analysis, find_blocked_reactions
 
 
 # Create a class to house riptide output data
@@ -21,8 +21,8 @@ class riptideClass:
         self.model = 'NULL'
         self.transcriptome = 'NULL'
         self.coefficients = 'NULL'
-        self.flux_analysis = 'NULL'
-        self.fluxes = 'NULL'
+        self.flux_samples = 'NULL'
+        self.flux_variability = 'NULL'
         self.quantile_range = 'NULL'
         self.linear_coefficient_range = 'NULL'
         self.fraction_of_optimum = 'NULL'
@@ -30,7 +30,7 @@ class riptideClass:
 
 # Create context-specific model based on transcript distribution
 def contextualize(model, transcription, defined = False, samples = 500, percentiles = [50.0, 62.5, 75.0, 87.5], 
-            coefficients = [1.0, 0.5, 0.1, 0.01, 0.001], fraction = 0.75, conservative = False, objective = True):
+            coefficients = [1.0, 0.5, 0.1, 0.01, 0.001], fraction = 0.75, conservative = False, objective = True, set_bounds = True):
     '''Reaction Inclusion by Parsimony and Transcriptomic Distribution or RIPTiDe
     
     Creates a contextualized metabolic model based on parsimonious usage of reactions defined
@@ -63,6 +63,9 @@ def contextualize(model, transcription, defined = False, samples = 500, percenti
     objective : bool
 		Sets previous objective function as a constraint with minimum flux equal to user input fraction
     	Default is True
+    set_bounds : bool
+        Uses flax variability analysis results from constrained model to set new bounds for all equations
+        Default is True
     '''
 
     start_time = time.time()
@@ -70,7 +73,7 @@ def contextualize(model, transcription, defined = False, samples = 500, percenti
     
     # Correct some possible user error
     samples = int(samples)
-    if samples < 0: samples = 0
+    if samples <= 0: samples = 1
     if len(set(transcription.values())) == 1:
         raise ValueError('ERROR: All transcriptomic abundances are identical! Please correct')
     if len(coefficients) != len(percentiles) + 1:
@@ -88,29 +91,41 @@ def contextualize(model, transcription, defined = False, samples = 500, percenti
     riptide_object.linear_coefficient_range = coefficients
     riptide_object.fraction_of_optimum = fraction
     riptide_object.transcriptome = transcription
-    if samples > 0:
-    	riptide_object.flux_analysis = 'Flux sampling'
-    else:
-    	riptide_object.flux_analysis = 'FVA'
 
     # Check original model functionality
     # Partition reactions based on transcription percentile intervals, assign corresponding reaction coefficients
     print('\nInitializing model and integrating transcriptomic data...')
     riptide_model = copy.deepcopy(model)
     riptide_model.id = str(riptide_model.id) + '_riptide'
+
+    # remove totally blocked reactions to speed yp subsequent sections
+    blocked_rxns = find_blocked_reactions(riptide_model)
+    riptide_model = _prune_model(riptide_model, blocked_rxns, defined, conservative)
+
+
     coefficient_dict = _assign_coefficients(transcription, riptide_model, percentiles, coefficients)
     riptide_object.coefficients = coefficient_dict
 
     # Prune now inactive network sections based on coefficients
     print('Pruning zero flux subnetworks...')
-    rm_rxns = _constrain_and_analyze_model(riptide_model, coefficient_dict, fraction, 'minimization', objective)
+    iters = 50 # needs to scale with model size
+    for x in range(1, iters):
+        rm_rxns = _constrain_and_analyze_model(riptide_model, coefficient_dict, fraction, 'minimization', objective)
+
+
+
     riptide_model = _prune_model(riptide_model, rm_rxns, defined, conservative)
-    riptide_object.model = riptide_model
 
     # Find optimal solution space based on transcription and final constraints
-    print('Sampling context-specific flux distributions...')
-    flux_object = _constrain_and_analyze_model(riptide_model, coefficient_dict, fraction, samples, objective)
-    riptide_object.fluxes = flux_object
+    print('Analyzing context-specific flux distributions...')
+    flux_samples, fva_result = _constrain_and_analyze_model(riptide_model, coefficient_dict, fraction, samples, objective)
+    riptide_object.flux_samples = flux_samples
+    riptide_object.flux_variability = fva_result
+
+    # Assign new reaction bounds
+    if set_bounds == True:
+        riptide_model = _set_new_bounds(riptide_model, fva_result, fraction)
+    riptide_object.model = riptide_model
 
     # Analyze changes introduced by RIPTiDe and return results
     _operation_report(start_time, model, riptide_model)
@@ -264,15 +279,16 @@ def _constrain_and_analyze_model(model, coefficient_dict, fraction, sampling_dep
             constrained_model.add_cons_vars([flux_sum_constraint])
             constrained_model.solver.update()
             
-            if sampling_depth > 0:
-            	# Perform flux sampling
-            	warnings.filterwarnings("ignore") # Handle uninformative infeasible warning
-            	flux_object = _gapsplit(constrained_model, n=sampling_depth)
-            	warnings.filterwarnings("default")
-            else:
-            	flux_object = flux_variability_analysis(constrained_model, fraction_of_optimum=fraction)
+            # Perform flux sampling
+            warnings.filterwarnings("ignore") # Handle uninformative infeasible warning
+            flux_samples = _gapsplit(constrained_model, n=sampling_depth)
+            warnings.filterwarnings("default")
 
-            return flux_object
+            # Set new reactions bounds if requested
+            fva = flux_variability_analysis(constrained_model, fraction_of_optimum=fraction)
+
+            return flux_samples, fva
+
 
 # Prune model based on blocked reactions from minimization as well as user-defined reactions
 def _prune_model(new_model, rm_rxns, defined_rxns, conserve):
@@ -320,6 +336,17 @@ def _prune_model(new_model, rm_rxns, defined_rxns, conserve):
     return new_model
 
 
+# Use flux variability analysis on the constrained model to set new reaction bounds
+def _set_new_bounds(model, fva, fraction):
+
+    # Set new bounds for all reactions
+	for rxn in model.reactions:
+		fva_result = list(fva.loc[rxn.id])
+        rxn.bounds = (min(fva_result), max(fva_result))
+
+	return model
+
+
 # Reports how long RIPTiDe took to run
 def _operation_report(start_time, model, riptide):
     
@@ -345,8 +372,11 @@ def _operation_report(start_time, model, riptide):
         print('Flux through the objective INCREASED to ~' + str(new_ov) + ' from ' + str(old_ov) + ' (' + str(per_shift) + '% change)')
     
     # Check that prune model can still achieve flux through the objective (just in case)
-    if riptide.slim_optimize() < 1e-6 or str(riptide.slim_optimize()) == 'nan':
-        print('\nWARNING: Contextualized model objective can no longer carry flux')
+    try:
+        if riptide.slim_optimize() < 1e-6 or str(riptide.slim_optimize()) == 'nan':
+            print('\nWARNING: Contextualized model objective can no longer carry flux')
+    except:
+        continue
     
     # Run time
     seconds = round(time.time() - start_time)
