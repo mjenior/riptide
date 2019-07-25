@@ -112,11 +112,11 @@ Initializing model and integrating transcriptomic data...
 Pruning zero flux subnetworks...
 Analyzing context-specific flux distributions...
 
-Reactions pruned to 274 from 1129 (75.73% change)
-Metabolites pruned to 279 from 1132 (75.35% change)
-Flux through the objective DECREASED to ~49.14 from ~65.43 (24.9% change)
+Reactions pruned to 285 from 1129 (74.76% change)
+Metabolites pruned to 285 from 1132 (74.82% change)
+Flux through the objective DECREASED to ~54.71 from ~65.43 (16.38% change)
 
-RIPTiDe completed in 36 seconds
+RIPTiDe completed in 35 seconds
 
 ```
 
