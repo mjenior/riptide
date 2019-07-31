@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: riptide
-Version: 2.1.1
+Version: 2.1.2
 Summary: Reaction Inclusion by Parsimony and Transcript Distribution (RIPTiDe)
 Home-page: https://github.com/mjenior/riptide
 Author: Matthew Jenior
@@ -57,9 +57,9 @@ Description: # RIPTiDe
         transcript_abundances_1 = riptide.read_transcription_file('examples/transcriptome1.tsv')
         transcript_abundances_2 = riptide.read_transcription_file('examples/transcriptome2.tsv', replicates=True)
         
-        riptide_object_1_a = riptide.contextualize(model=my_model, transcription=transcript_abundances_1)
-        riptide_object_1_b = riptide.contextualize(model=my_model, transcription=transcript_abundances_1, defined='examples/defined.tsv')
-        riptide_object_2 = riptide.contextualize(model=my_model, transcription=transcript_abundances_2)
+        riptide_object_1_a = riptide.contextualize(model=my_model, transcriptome=transcript_abundances_1)
+        riptide_object_1_b = riptide.contextualize(model=my_model, transcriptome=transcript_abundances_1, defined='examples/defined.tsv')
+        riptide_object_2 = riptide.contextualize(model=my_model, transcriptome=transcript_abundances_2)
         ``` 
         
         ### Additional parameters for main RIPTiDe functions:
@@ -83,7 +83,7 @@ Description: # RIPTiDe
         ```
         model : cobra.Model
             The model to be contextualized (REQUIRED)
-        transcription : dictionary
+        transcriptome : dictionary
             Dictionary of transcript abundances, output of read_transcription_file (REQUIRED)
         defined : False or File
             Text file containing reactions IDs for forced inclusion listed on the first line and exclusion 
@@ -124,14 +124,14 @@ Description: # RIPTiDe
         Metabolites pruned to 285 from 1132 (74.82% change)
         Flux through the objective DECREASED to ~54.71 from ~65.43 (16.38% change)
         
-        RIPTiDe completed in 35 seconds
+        RIPTiDe completed in 22 seconds
         
         ```
         
         ### Resulting RIPTiDe object (class) properties:
         
         - **model** - Contextualized genome-scale metabolic network reconstruction
-        - **transcriptome** - Dictionary of transcriptomic abundances provded by user
+        - **transcriptome** - Dictionary of transcriptomic abundances provided by user
         - **coefficients** - Dictionary of linear coefficients assigned to each reaction based on transcript values
         - **flux_samples** - Flux sampling pandas object from constrained model
         - **flux_variability** - Flux variability analysis pandas object from constrained model

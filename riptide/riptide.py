@@ -29,9 +29,9 @@ class riptideClass:
 
 
 # Create context-specific model based on transcript distribution
-def contextualize(model, transcription, defined = False, samples = 500, 
+def contextualize(model, transcriptome, defined = False, samples = 500, 
     percentiles = [50.0, 62.5, 75.0, 87.5], coefficients = [1.0, 0.5, 0.1, 0.01, 0.001], 
-    fraction = 0.75, conservative = False, objective = True, set_bounds = False):
+    fraction = 0.75, conservative = False, objective = True, set_bounds = True):
 
     '''Reaction Inclusion by Parsimony and Transcriptomic Distribution or RIPTiDe
     
@@ -43,8 +43,10 @@ def contextualize(model, transcription, defined = False, samples = 500,
     ----------
     model : cobra.Model
         The model to be contextualized
-    transcription : dictionary
+        REQUIRED
+    transcriptome : dictionary
         Dictionary of transcript abundances, output of read_transcription_file()
+        REQUIRED
     defined : File
         Text file containing reactions IDs for forced inclusion listed on the first line and exclusion 
         listed on the second line (both .csv and .tsv formats supported)
@@ -93,7 +95,7 @@ def contextualize(model, transcription, defined = False, samples = 500,
     riptide_object.quantile_range = percentiles
     riptide_object.linear_coefficient_range = coefficients
     riptide_object.fraction_of_optimum = fraction
-    riptide_object.transcriptome = transcription
+    riptide_object.transcriptome = transcriptome
 
     # Check original model functionality
     # Partition reactions based on transcription percentile intervals, assign corresponding reaction coefficients
@@ -104,7 +106,7 @@ def contextualize(model, transcription, defined = False, samples = 500,
     # Remove totally blocked reactions to speed up subsequent sections
     blocked_rxns = find_blocked_reactions(riptide_model)
     riptide_model = _prune_model(riptide_model, blocked_rxns, defined, conservative)
-    coefficient_dict = _assign_coefficients(transcription, riptide_model, percentiles, coefficients)
+    coefficient_dict = _assign_coefficients(transcriptome, riptide_model, percentiles, coefficients)
     riptide_object.coefficients = coefficient_dict
 
     # Prune now inactive network sections based on coefficients
@@ -233,7 +235,7 @@ def _incorporate_user_defined_reactions(rm_rxns, reaction_file):
         raise FileNotFoundError('ERROR: Defined reactions file not found! Please correct.')
         
     rm_rxns = rm_rxns.difference(include_rxns)
-    rm_rxns |= exclude_rxns
+    rm_rxns = rm_rxns.union(exclude_rxns)
 
     return rm_rxns
 
@@ -443,8 +445,7 @@ def _gapsplit(
         A data frame with rows = samples and columns = reactions. This is the
         same format as the other cobrapy samplers.
     """
-    # output has rows = samples, columns = variables
-    # cobrapy returns a pandas DF
+
     warnings.filterwarnings('ignore') # Handle uninformative infeasible warning
 
     reactions = model.reactions
