@@ -50,7 +50,7 @@ transcript_abundances_1 = riptide.read_transcription_file('examples/transcriptom
 transcript_abundances_2 = riptide.read_transcription_file('examples/transcriptome2.tsv', replicates=True)
 
 riptide_object_1_a = riptide.contextualize(model=my_model, transcriptome=transcript_abundances_1)
-riptide_object_1_b = riptide.contextualize(model=my_model, transcriptome=transcript_abundances_1, defined='examples/defined.tsv')
+riptide_object_1_b = riptide.contextualize(model=my_model, transcriptome=transcript_abundances_1, include=['rxn1'], exclude=['rxn2','rxn3'])
 riptide_object_2 = riptide.contextualize(model=my_model, transcriptome=transcript_abundances_2)
 ``` 
 
@@ -77,9 +77,6 @@ model : cobra.Model
     The model to be contextualized (REQUIRED)
 transcriptome : dictionary
     Dictionary of transcript abundances, output of read_transcription_file (REQUIRED)
-defined : False or File
-    Text file containing reactions IDs for forced inclusion listed on the first line and exclusion 
-    listed on the second line (both .csv and .tsv formats supported)
 samples : int 
     Number of flux samples to collect, default is 500
 percentiles : list of floats
@@ -103,6 +100,10 @@ objective : bool
 set_bounds : bool
     Uses flax variability analysis results from constrained model to set new bounds for all equations
     Default is True
+include : list
+    List of reaction ID strings for forced inclusion in final model
+exclude : list
+    List of reaction ID strings for forced exclusion from final model
 ```
 
 ### Example stdout report:
@@ -130,6 +131,7 @@ RIPTiDe completed in 22 seconds
 - **quantile_range** - Percentile intervals by which to parse transcript abundance distribution
 - **linear_coefficient_range** - Linear coeeficients assigned to corresponding quantile
 - **fraction_of_optimum** - Minimum specified percentage of optimal objective flux during contextualization
+- **user_defined** - User defined reactions in a 2 element list that either were included or excluded - [included reactions, excluded reaction]
 
 
 ## Additional Information

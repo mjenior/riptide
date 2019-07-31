@@ -6,7 +6,7 @@ with open('README.md', 'r') as readme:
     long_description = readme.read()
 
 setup(name='riptide',
-	version='2.1.2', 
+	version='2.1.3', 
 	description='Reaction Inclusion by Parsimony and Transcript Distribution (RIPTiDe)',
 	author='Matthew Jenior',
 	author_email='mattjenior@gmail.com',

@@ -26,12 +26,14 @@ class riptideClass:
         self.quantile_range = 'NULL'
         self.linear_coefficient_range = 'NULL'
         self.fraction_of_optimum = 'NULL'
+        self.user_defined = 'NULL'
 
 
 # Create context-specific model based on transcript distribution
-def contextualize(model, transcriptome, defined = False, samples = 500, 
+def contextualize(model, transcriptome, samples = 500, 
     percentiles = [50.0, 62.5, 75.0, 87.5], coefficients = [1.0, 0.5, 0.1, 0.01, 0.001], 
-    fraction = 0.75, conservative = False, objective = True, set_bounds = True):
+    fraction = 0.75, conservative = False, objective = True, set_bounds = True,
+    include = [], exclude = []):
 
     '''Reaction Inclusion by Parsimony and Transcriptomic Distribution or RIPTiDe
     
@@ -47,9 +49,6 @@ def contextualize(model, transcriptome, defined = False, samples = 500,
     transcriptome : dictionary
         Dictionary of transcript abundances, output of read_transcription_file()
         REQUIRED
-    defined : File
-        Text file containing reactions IDs for forced inclusion listed on the first line and exclusion 
-        listed on the second line (both .csv and .tsv formats supported)
     samples : int 
         Number of flux samples to collect, default is 500. If 0, sampling skipped FVA used instead
     percentiles : list
@@ -70,6 +69,10 @@ def contextualize(model, transcriptome, defined = False, samples = 500,
     set_bounds : bool
         Uses flax variability analysis results from constrained model to set new bounds for all equations
         Default is False
+    include : list
+        List of reaction ID strings for forced inclusion in final model
+    exclude : list
+        List of reaction ID strings for forced exclusion from final model
     '''
 
     start_time = time.time()
@@ -96,6 +99,7 @@ def contextualize(model, transcriptome, defined = False, samples = 500,
     riptide_object.linear_coefficient_range = coefficients
     riptide_object.fraction_of_optimum = fraction
     riptide_object.transcriptome = transcriptome
+    riptide_object.user_defined = [include, exclude]
 
     # Check original model functionality
     # Partition reactions based on transcription percentile intervals, assign corresponding reaction coefficients
@@ -105,19 +109,17 @@ def contextualize(model, transcriptome, defined = False, samples = 500,
 
     # Remove totally blocked reactions to speed up subsequent sections
     blocked_rxns = find_blocked_reactions(riptide_model)
-    riptide_model = _prune_model(riptide_model, blocked_rxns, defined, conservative)
+    blocked_rxns = blocked_rxns.difference(set(include))
+    blocked_rxns = blocked_rxns.union(set(exclude))
+    riptide_model = _prune_model(riptide_model, blocked_rxns, conservative)
     coefficient_dict = _assign_coefficients(transcriptome, riptide_model, percentiles, coefficients)
     riptide_object.coefficients = coefficient_dict
 
     # Prune now inactive network sections based on coefficients
     print('Pruning zero flux subnetworks...')
-    #iters = int(round(len(riptide_model.reactions) * 0.05)) + 1 # Adaptive to model size
-    #rm_rxns = set([rxn.id for rxn in riptide_model.reactions])
-    #for x in range(1, iters):
-    #    curr_rxns = _constrain_and_analyze_model(riptide_model, coefficient_dict, fraction, 0, objective)
-    #    rm_rxns = rm_rxns.intersection(curr_rxns)
     rm_rxns = _constrain_and_analyze_model(riptide_model, coefficient_dict, fraction, 0, objective)
-    riptide_model = _prune_model(riptide_model, rm_rxns, defined, conservative)
+    rm_rxns = rm_rxns.difference(set(include))
+    riptide_model = _prune_model(riptide_model, rm_rxns, conservative)
 
     # Find optimal solution space based on transcription and final constraints
     print('Analyzing context-specific flux distributions...')
@@ -186,7 +188,7 @@ def _assign_coefficients(raw_transcription_dict, model, percentiles, min_coeffic
             continue
     
     # Calculate transcript abundance cutoffs
-    distribution = list(transcription_dict.values())
+    distribution = list(transcription_dict.values()).sort()
     abund_cutoffs = [numpy.percentile(distribution, x) for x in percentiles]
     
     # Screen transcript distribution by newly defined abundance intervals
@@ -218,26 +220,6 @@ def _assign_coefficients(raw_transcription_dict, model, percentiles, min_coeffic
             continue
     
     return coefficient_dict
-
-
-# Read in user defined reactions to keep or exclude
-def _incorporate_user_defined_reactions(rm_rxns, reaction_file):
-    
-    print('Integrating user definitions...')
-    sep = ',' if '.csv' in str(reaction_file) else '\t'
-    
-    # Check if file actually exists    
-    try:
-        with open(reaction_file, 'r') as reactions:
-            include_rxns = set(reactions.readline().split(sep))
-            exclude_rxns = set(reactions.readline().split(sep))
-    except FileNotFoundError:
-        raise FileNotFoundError('ERROR: Defined reactions file not found! Please correct.')
-        
-    rm_rxns = rm_rxns.difference(include_rxns)
-    rm_rxns = rm_rxns.union(exclude_rxns)
-
-    return rm_rxns
 
 
 # Determine those reactions that carry flux in a pFBA objective set to a threshold of maximum
@@ -291,11 +273,7 @@ def _constrain_and_analyze_model(model, coefficient_dict, fraction, sampling_dep
 
 
 # Prune model based on blocked reactions from minimization as well as user-defined reactions
-def _prune_model(new_model, rm_rxns, defined_rxns, conserve):
-      
-    # Integrate user definitions
-    if defined_rxns != False: 
-        rm_rxns = _incorporate_user_defined_reactions(rm_rxns, defined_rxns)
+def _prune_model(new_model, rm_rxns, conserve):
         
     # Parse elements highlighted for pruning based on GPRs
     if conserve == True:
