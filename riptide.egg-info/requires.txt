@@ -1,3 +1,4 @@
 cobra
 symengine
 pandas
+numpy

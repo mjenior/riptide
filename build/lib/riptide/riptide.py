@@ -189,6 +189,7 @@ def _assign_coefficients(raw_transcription_dict, model, percentiles, min_coeffic
     
     # Calculate transcript abundance cutoffs
     distribution = list(transcription_dict.values())
+    distribution.sort()
     abund_cutoffs = [numpy.percentile(distribution, x) for x in percentiles]
     
     # Screen transcript distribution by newly defined abundance intervals
@@ -199,7 +200,7 @@ def _assign_coefficients(raw_transcription_dict, model, percentiles, min_coeffic
             index = abund_cutoffs.index(transcription)
             min_coefficient = min_coefficients[index]
         else:
-            index = bisect.bisect_right(abund_cutoffs, transcription) - 1
+            index = bisect.bisect_right(abund_cutoffs, transcription)
             min_coefficient = min_coefficients[index]
                     
         # Assign corresponding coefficients to reactions associated with each gene
