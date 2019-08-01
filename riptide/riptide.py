@@ -81,7 +81,7 @@ def contextualize(model, transcriptome, samples = 500,
     # Correct some possible user error
     samples = int(samples)
     if samples <= 0: samples = 1
-    if len(set(transcription.values())) == 1:
+    if len(set(transcriptome.values())) == 1:
         raise ValueError('ERROR: All transcriptomic abundances are identical! Please correct')
     if len(coefficients) != len(percentiles) + 1:
         raise ValueError('ERROR: Invalid ratio of percentile cutoffs to linear coefficients! Please correct')
