@@ -108,7 +108,7 @@ def contextualize(model, transcriptome, samples = 500,
     riptide_model.id = str(riptide_model.id) + '_riptide'
 
     # Remove totally blocked reactions to speed up subsequent sections
-    blocked_rxns = find_blocked_reactions(riptide_model)
+    blocked_rxns = set(find_blocked_reactions(riptide_model))
     blocked_rxns = blocked_rxns.difference(set(include))
     blocked_rxns = blocked_rxns.union(set(exclude))
     riptide_model = _prune_model(riptide_model, blocked_rxns, conservative)
@@ -188,7 +188,7 @@ def _assign_coefficients(raw_transcription_dict, model, percentiles, min_coeffic
             continue
     
     # Calculate transcript abundance cutoffs
-    distribution = list(transcription_dict.values()).sort()
+    distribution = list(transcription_dict.values())
     abund_cutoffs = [numpy.percentile(distribution, x) for x in percentiles]
     
     # Screen transcript distribution by newly defined abundance intervals
