@@ -79,12 +79,6 @@ transcriptome : dictionary
     Dictionary of transcript abundances, output of read_transcription_file (REQUIRED)
 samples : int 
     Number of flux samples to collect, default is 500
-percentiles : list of floats
-    Percentile cutoffs of transcript abundance for linear coefficient assignments to associated reactions
-    Default is [50.0, 62.5, 75.0, 87.5]
-coefficients : list of floats
-    Linear coefficients to weight reactions based on distribution placement
-    Default is [1.0, 0.5, 0.1, 0.01, 0.001]
 fraction : float
     Minimum percent of optimal objective value during FBA steps
     Default is 0.75
@@ -128,8 +122,6 @@ RIPTiDe completed in 22 seconds
 - **coefficients** - Dictionary of linear coefficients assigned to each reaction based on transcript values
 - **flux_samples** - Flux sampling pandas object from constrained model
 - **flux_variability** - Flux variability analysis pandas object from constrained model
-- **quantile_range** - Percentile intervals by which to parse transcript abundance distribution
-- **linear_coefficient_range** - Linear coeeficients assigned to corresponding quantile
 - **fraction_of_optimum** - Minimum specified percentage of optimal objective flux during contextualization
 - **user_defined** - User defined reactions in a 2 element list that either were included or excluded - [included reactions, excluded reaction]
 

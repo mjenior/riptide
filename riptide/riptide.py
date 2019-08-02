@@ -6,7 +6,6 @@ import time
 import numpy
 import cobra
 import pandas
-import bisect
 import warnings
 import symengine
 from cobra.util import solver
@@ -23,23 +22,20 @@ class riptideClass:
         self.coefficients = 'NULL'
         self.flux_samples = 'NULL'
         self.flux_variability = 'NULL'
-        self.quantile_range = 'NULL'
-        self.linear_coefficient_range = 'NULL'
         self.fraction_of_optimum = 'NULL'
         self.user_defined = 'NULL'
 
 
 # Create context-specific model based on transcript distribution
 def contextualize(model, transcriptome, samples = 500, 
-    percentiles = [50.0, 62.5, 75.0, 87.5], coefficients = [1.0, 0.5, 0.1, 0.01, 0.001], 
-    fraction = 0.75, conservative = False, objective = True, set_bounds = True,
+    fraction = 0.8, conservative = False, objective = True, set_bounds = True,
     include = [], exclude = []):
 
     '''Reaction Inclusion by Parsimony and Transcriptomic Distribution or RIPTiDe
     
     Creates a contextualized metabolic model based on parsimonious usage of reactions defined
     by their associated transcriptomic abundances. Returns a pruned, context-specific cobra.Model 
-    and a pandas.DataFrame of associated flux analysis
+    and a pandas.DataFrame of associated flux analysis along with parameters used in a riptide class object
 
     Parameters
     ----------
@@ -50,13 +46,7 @@ def contextualize(model, transcriptome, samples = 500,
         Dictionary of transcript abundances, output of read_transcription_file()
         REQUIRED
     samples : int 
-        Number of flux samples to collect, default is 500. If 0, sampling skipped FVA used instead
-    percentiles : list
-        Percentile cutoffs of transcript abundance for linear coefficient assignments to associated reactions
-        Default is [50.0, 62.5, 75.0, 87.5]
-    coefficients : list
-        Linear coefficients to weight reactions based on distribution placement
-        Default is [1.0, 0.5, 0.1, 0.01, 0.001]
+        Number of flux samples to collect, default is 500
     fraction : float
         Minimum percent of optimal objective value during FBA steps
         Default is 0.8
@@ -86,17 +76,12 @@ def contextualize(model, transcriptome, samples = 500,
     if len(coefficients) != len(percentiles) + 1:
         raise ValueError('ERROR: Invalid ratio of percentile cutoffs to linear coefficients! Please correct')
     fraction = float(fraction)
-    if fraction <= 0.0:
-        fraction = 0.8
-    percentiles.sort() # sort ascending
-    coefficients.sort(reverse=True) # sort descending
+    if fraction <= 0.0: fraction = 0.8
     solution = model.slim_optimize()
     if model.slim_optimize() < 1e-6 or str(model.slim_optimize()) == 'nan':
         raise ValueError('ERROR: Provided model objective cannot carry flux! Please correct')
 
     # Save parameters as part of the output object
-    riptide_object.quantile_range = percentiles
-    riptide_object.linear_coefficient_range = coefficients
     riptide_object.fraction_of_optimum = fraction
     riptide_object.transcriptome = transcriptome
     riptide_object.user_defined = [include, exclude]
@@ -112,7 +97,7 @@ def contextualize(model, transcriptome, samples = 500,
     blocked_rxns = blocked_rxns.difference(set(include))
     blocked_rxns = blocked_rxns.union(set(exclude))
     riptide_model = _prune_model(riptide_model, blocked_rxns, conservative)
-    coefficient_dict = _assign_coefficients(transcriptome, riptide_model, percentiles, coefficients)
+    coefficient_dict = _assign_coefficients(transcriptome, riptide_model)
     riptide_object.coefficients = coefficient_dict
 
     # Prune now inactive network sections based on coefficients
@@ -176,51 +161,55 @@ def read_transcription_file(read_abundances_file, header=False, replicates=False
     return abund_dict
 
 
-# Converts a dictionary of transcript distribution percentiles
-def _assign_coefficients(raw_transcription_dict, model, percentiles, min_coefficients):
+# Converts a dictionary of transcript abundances to reaction linear coefficients
+def _assign_coefficients(raw_transcription_dict, model):
     
     # Screen transcriptomic abundances for genes that are included in model
     transcription_dict = {}
     for gene in model.genes:
         try:
-            transcription_dict[gene.id] = raw_transcription_dict[gene.id]
+            transcription_dict[gene.id] = float(raw_transcription_dict[gene.id])
         except KeyError:
             continue
     
-    # Calculate transcript abundance cutoffs
-    distribution = list(transcription_dict.values())
-    distribution.sort()
-    abund_cutoffs = [numpy.percentile(distribution, x) for x in percentiles]
+    # Calculate transcript abundance based coefficients
+    abund_distribution = list(transcription_dict.values())
+    abund_distribution.sort()
+    max_transcipt = max(distribution)
+    abund_distribution = list(set(abund_distribution))
+    coefficients = rev([float(x+1.0) / float(max_transcipt) for x in abund_distribution])
     
-    # Screen transcript distribution by newly defined abundance intervals
-    coefficient_dict = {}
+    # Assign coefficients to abundances
+    abund_coefficient_dict = {}
+    for index in range(0, len(abund_distribution)):
+        curr_coefficient = coefficients[index]
+        if coefficients[index] < 0.0001: curr_coefficient = 0.0001 # Don't let coefficients get too low
+        abund_coefficient_dict[abund_distribution[index]] = curr_coefficient
+
+    # Assign coefficients to reactions
+    rxn_coefficient_dict = {}
     for gene in transcription_dict.keys():
         transcription = transcription_dict[gene]
-        if transcription in abund_cutoffs:
-            index = abund_cutoffs.index(transcription)
-            min_coefficient = min_coefficients[index]
-        else:
-            index = bisect.bisect_right(abund_cutoffs, transcription)
-            min_coefficient = min_coefficients[index]
-                    
+        coefficient = abund_coefficient_dict[transcription]
+
         # Assign corresponding coefficients to reactions associated with each gene
         for rxn in list(model.genes.get_by_any(gene)[0].reactions):            
-            if rxn.id in coefficient_dict.keys():
-                coefficient_dict[rxn.id].append(min_coefficient)
+            if rxn.id in rxn_coefficient_dict.keys():
+                rxn_coefficient_dict[rxn.id].append(coefficient)
             else:
-                coefficient_dict[rxn.id] = [min_coefficient]
+                rxn_coefficient_dict[rxn.id] = [coefficient]
     
-    # Assign final coefficients
-    nogene_coefficient = numpy.median(min_coefficients)
+    # Select final coefficients
+    nogene_coefficient = numpy.median(coefficients)
     for rxn in model.reactions:
         try:
             # Take smallest value for reactions assigned multiple coefficients
-            coefficient_dict[rxn.id] = min(coefficient_dict[rxn.id])
+            rxn_coefficient_dict[rxn.id] = min(rxn_coefficient_dict[rxn.id])
         except KeyError:
-            coefficient_dict[rxn.id] = nogene_coefficient
+            rxn_coefficient_dict[rxn.id] = nogene_coefficient
             continue
     
-    return coefficient_dict
+    return rxn_coefficient_dict
 
 
 # Determine those reactions that carry flux in a pFBA objective set to a threshold of maximum
