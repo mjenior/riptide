@@ -28,8 +28,8 @@ class riptideClass:
 
 # Create context-specific model based on transcript distribution
 def contextualize(model, transcriptome, samples = 500, 
-    fraction = 0.8, conservative = False, objective = True, set_bounds = True,
-    include = [], exclude = []):
+    fraction = 0.8, minimum = 0.0001, conservative = False, objective = True, 
+    set_bounds = True, include = [], exclude = []):
 
     '''Reaction Inclusion by Parsimony and Transcriptomic Distribution or RIPTiDe
     
@@ -50,6 +50,9 @@ def contextualize(model, transcriptome, samples = 500,
     fraction : float
         Minimum percent of optimal objective value during FBA steps
         Default is 0.8
+    minimum : float
+		Minimum linear coefficient allowed during weight calculation for pFBA
+		Default is 0.0001
     conservative : bool
         Conservatively remove inactive reactions based on genes
         Default is False
@@ -95,7 +98,7 @@ def contextualize(model, transcriptome, samples = 500,
     blocked_rxns = blocked_rxns.difference(set(include))
     blocked_rxns = blocked_rxns.union(set(exclude))
     riptide_model = _prune_model(riptide_model, blocked_rxns, conservative)
-    coefficient_dict = _assign_coefficients(transcriptome, riptide_model)
+    coefficient_dict = _assign_coefficients(transcriptome, riptide_model, minimum)
     riptide_object.coefficients = coefficient_dict
 
     # Prune now inactive network sections based on coefficients
@@ -160,7 +163,7 @@ def read_transcription_file(read_abundances_file, header=False, replicates=False
 
 
 # Converts a dictionary of transcript abundances to reaction linear coefficients
-def _assign_coefficients(raw_transcription_dict, model):
+def _assign_coefficients(raw_transcription_dict, model, minimum):
     
     # Screen transcriptomic abundances for genes that are included in model
     transcription_dict = {}
@@ -170,18 +173,18 @@ def _assign_coefficients(raw_transcription_dict, model):
         except KeyError:
             continue
     
-    # Calculate transcript abundance based coefficients
+    # Calculate transcript abundance based coefficients, handle divide-by-zero errors
     abund_distribution = list(set(transcription_dict.values()))
     abund_distribution.sort()
-    max_transcipt = max(abund_distribution)
-    coefficients = [float(x+1.0) / float(max_transcipt) for x in abund_distribution]
+    max_transcipt = float(max(abund_distribution)) + 1.0
+    coefficients = [float(x+1.0) / max_transcipt for x in abund_distribution]
     coefficients.reverse()
 
-    # Assign coefficients to abundances
+    # Assign coefficients to abundances, don't let coefficients get too low
     abund_coefficient_dict = {}
     for index in range(0, len(abund_distribution)):
         curr_coefficient = coefficients[index]
-        if coefficients[index] < 0.0001: curr_coefficient = 0.0001 # Don't let coefficients get too low
+        if coefficients[index] < minimum: curr_coefficient = minimum
         abund_coefficient_dict[abund_distribution[index]] = curr_coefficient
 
     # Assign coefficients to reactions

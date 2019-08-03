@@ -81,7 +81,10 @@ samples : int
     Number of flux samples to collect, default is 500
 fraction : float
     Minimum percent of optimal objective value during FBA steps
-    Default is 0.75
+    Default is 0.8
+minimum : float
+	Minimum linear coefficient allowed during weight calculation for pFBA
+	Default is 0.0001
 conservative : bool
     Conservatively remove inactive reactions based on genes
     Default is False
