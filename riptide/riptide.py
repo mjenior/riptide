@@ -73,8 +73,6 @@ def contextualize(model, transcriptome, samples = 500,
     if samples <= 0: samples = 1
     if len(set(transcriptome.values())) == 1:
         raise ValueError('ERROR: All transcriptomic abundances are identical! Please correct')
-    if len(coefficients) != len(percentiles) + 1:
-        raise ValueError('ERROR: Invalid ratio of percentile cutoffs to linear coefficients! Please correct')
     fraction = float(fraction)
     if fraction <= 0.0: fraction = 0.8
     solution = model.slim_optimize()
@@ -173,12 +171,12 @@ def _assign_coefficients(raw_transcription_dict, model):
             continue
     
     # Calculate transcript abundance based coefficients
-    abund_distribution = list(transcription_dict.values())
+    abund_distribution = list(set(transcription_dict.values()))
     abund_distribution.sort()
-    max_transcipt = max(distribution)
-    abund_distribution = list(set(abund_distribution))
-    coefficients = rev([float(x+1.0) / float(max_transcipt) for x in abund_distribution])
-    
+    max_transcipt = max(abund_distribution)
+    coefficients = [float(x+1.0) / float(max_transcipt) for x in abund_distribution]
+    coefficients.reverse()
+
     # Assign coefficients to abundances
     abund_coefficient_dict = {}
     for index in range(0, len(abund_distribution)):
