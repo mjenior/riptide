@@ -1,0 +1,11 @@
+LICENSE.txt
+MANIFEST.in
+README.md
+setup.py
+riptide/__init__.py
+riptide/riptide.py
+riptide.egg-info/PKG-INFO
+riptide.egg-info/SOURCES.txt
+riptide.egg-info/dependency_links.txt
+riptide.egg-info/requires.txt
+riptide.egg-info/top_level.txt
