@@ -27,7 +27,7 @@ class riptideClass:
 
 
 # Create context-specific model based on transcript distribution
-def contextualize(model, transcriptome, samples = 500, 
+def contextualize(model, transcriptome, samples = 500, norm = True,
     fraction = 0.8, minimum = 0.0001, conservative = False, objective = True, 
     set_bounds = True, include = [], exclude = []):
 
@@ -47,6 +47,9 @@ def contextualize(model, transcriptome, samples = 500,
         REQUIRED
     samples : int 
         Number of flux samples to collect, default is 500
+    norm : bool
+    	Normalize transcript abundances using RPM calculation
+    	Performed by default
     fraction : float
         Minimum percent of optimal objective value during FBA steps
         Default is 0.8
@@ -98,7 +101,7 @@ def contextualize(model, transcriptome, samples = 500,
     blocked_rxns = blocked_rxns.difference(set(include))
     blocked_rxns = blocked_rxns.union(set(exclude))
     riptide_model = _prune_model(riptide_model, blocked_rxns, conservative)
-    coefficient_dict = _assign_coefficients(transcriptome, riptide_model, minimum)
+    coefficient_dict = _assign_coefficients(transcriptome, riptide_model, minimum, norm)
     riptide_object.coefficients = coefficient_dict
 
     # Prune now inactive network sections based on coefficients
@@ -124,7 +127,7 @@ def contextualize(model, transcriptome, samples = 500,
 
 
 # Read in transcriptomic read abundances, default is tsv with no header 
-def read_transcription_file(read_abundances_file, header=False, replicates=False, sep='\t'):
+def read_transcription_file(read_abundances_file, header = False, replicates = False, sep = '\t'):
     '''Generates dictionary of transcriptomic abundances from a file.
     
     Parameters
@@ -137,7 +140,7 @@ def read_transcription_file(read_abundances_file, header=False, replicates=False
     replicates : boolean
         Defines if read abundances contains replicates and medians require calculation
         default is no replicates
-    sep: string
+    sep : string
         Defines what character separates entries on each line
         defaults to tab (.tsv)
     '''
@@ -163,16 +166,24 @@ def read_transcription_file(read_abundances_file, header=False, replicates=False
 
 
 # Converts a dictionary of transcript abundances to reaction linear coefficients
-def _assign_coefficients(raw_transcription_dict, model, minimum):
+def _assign_coefficients(raw_transcription_dict, model, minimum, norm):
     
     # Screen transcriptomic abundances for genes that are included in model
     transcription_dict = {}
     for gene in model.genes:
         try:
-            transcription_dict[gene.id] = float(raw_transcription_dict[gene.id])
+            transcription_dict[gene.id] = float(raw_transcription_dict[gene.id])            
         except KeyError:
             continue
-    
+
+    # Perform RPM normalization if specified
+    if norm == True:
+    	total_transcript = float(sum(transcription_dict.values()))
+    	for gene in transcription_dict.keys():
+    		new_abund = (transcription_dict[gene] / total_transcript) * 1000000.0
+    		new_abund = round(new_abund, 3)
+    		transcription_dict[gene] = new_abund
+
     # Calculate transcript abundance based coefficients, handle divide-by-zero errors
     abund_distribution = list(set(transcription_dict.values()))
     abund_distribution.sort()
