@@ -9,6 +9,7 @@ import pandas
 import warnings
 import symengine
 from cobra.util import solver
+from scipy.stats import spearmanr
 from optlang.symbolics import Zero
 from cobra.manipulation.delete import remove_genes
 from cobra.flux_analysis import flux_variability_analysis, find_blocked_reactions
@@ -24,11 +25,12 @@ class riptideClass:
         self.flux_variability = 'NULL'
         self.fraction_of_optimum = 'NULL'
         self.user_defined = 'NULL'
+        self.concordance = 'NULL'
 
 
 # Create context-specific model based on transcript distribution
 def contextualize(model, transcriptome, samples = 500, norm = True,
-    fraction = 0.8, minimum = 0.0001, conservative = False, objective = True, 
+    fraction = 0.8, minimum = None, conservative = False, objective = True, 
     set_bounds = True, include = [], exclude = []):
 
     '''Reaction Inclusion by Parsimony and Transcriptomic Distribution or RIPTiDe
@@ -55,7 +57,7 @@ def contextualize(model, transcriptome, samples = 500, norm = True,
         Default is 0.8
     minimum : float
 		Minimum linear coefficient allowed during weight calculation for pFBA
-		Default is 0.0001
+		Default is None
     conservative : bool
         Conservatively remove inactive reactions based on genes
         Default is False
@@ -112,9 +114,10 @@ def contextualize(model, transcriptome, samples = 500, norm = True,
 
     # Find optimal solution space based on transcription and final constraints
     print('Analyzing context-specific flux distributions...')
-    flux_samples, fva_result = _constrain_and_analyze_model(riptide_model, coefficient_dict, fraction, samples, objective)
+    flux_samples, fva_result, concordance = _constrain_and_analyze_model(riptide_model, coefficient_dict, fraction, samples, objective)
     riptide_object.flux_samples = flux_samples
     riptide_object.flux_variability = fva_result
+    riptide_object.concordance = concordance
 
     # Assign new reaction bounds
     if set_bounds == True:
@@ -122,7 +125,7 @@ def contextualize(model, transcriptome, samples = 500, norm = True,
     riptide_object.model = riptide_model
 
     # Analyze changes introduced by RIPTiDe and return results
-    _operation_report(start_time, model, riptide_model)
+    _operation_report(start_time, model, riptide_model, concordance)
     return riptide_object
 
 
@@ -176,11 +179,11 @@ def _assign_coefficients(raw_transcription_dict, model, minimum, norm):
         except KeyError:
             continue
 
-    # Perform RPM normalization if specified
+    # Perform RPK normalization if specified
     if norm == True:
     	total_transcript = float(sum(transcription_dict.values()))
     	for gene in transcription_dict.keys():
-    		new_abund = (transcription_dict[gene] / total_transcript) * 1000000.0
+    		new_abund = (transcription_dict[gene] / total_transcript) * 1000.0
     		new_abund = round(new_abund, 3)
     		transcription_dict[gene] = new_abund
 
@@ -271,7 +274,30 @@ def _constrain_and_analyze_model(model, coefficient_dict, fraction, sampling_dep
             flux_samples = _gapsplit(constrained_model, n=sampling_depth)
             fva = flux_variability_analysis(constrained_model, fraction_of_optimum=fraction)
 
-            return flux_samples, fva
+            # Calculate concordance
+            concordance = _calc_concordance(flux_samples, coefficient_dict)
+
+            return flux_samples, fva, concordance
+
+
+# Find level of concordance between contextualized flux and assigned coefficients
+def _calc_concordance(flux_samples, coefficient_dict):
+
+	flux_medians = []
+	coefficients = []
+	concordance_dict = {}
+
+	for rxn in coefficient_dict.keys():
+		curr_flux = median(list(flux_samples[rxn]))
+		flux_medians.append(curr_flux)
+		curr_coeff = coefficient_dict[rxn]
+		coefficients.append(curr_coeff)
+		concordance_dict[rxn] = [curr_coeff, curr_flux]
+		
+	r_val, p_val = spearmanr(flux_medians, coefficients)
+	concordance_dict['corr'] = [r_val, p_val]
+	
+	return concordance_dict
 
 
 # Prune model based on blocked reactions from minimization as well as user-defined reactions
@@ -328,7 +354,7 @@ def _set_new_bounds(model, fva, fraction):
 
 
 # Reports how long RIPTiDe took to run
-def _operation_report(start_time, model, riptide):
+def _operation_report(start_time, model, riptide, concordance):
     
     # Pruning
     perc_removal = 100.0 - ((float(len(riptide.reactions)) / float(len(model.reactions))) * 100.0)
@@ -351,6 +377,11 @@ def _operation_report(start_time, model, riptide):
         per_shift = round(abs(per_shift), 2)
         print('Flux through the objective INCREASED to ~' + str(new_ov) + ' from ' + str(old_ov) + ' (' + str(per_shift) + '% change)')
     
+    # Report concordance
+    r_val = str(round(concordance['corr'][0], 2))
+    p_val = str(round(concordance['corr'][0], 3))
+    print('Contextualized model is ~' + r_val + ' concordant with a p-value of ~' + p_val + ' to the provided transcriptome')
+
     # Check that prune model can still achieve flux through the objective (just in case)
     try:
         if riptide.slim_optimize() < 1e-6 or str(riptide.slim_optimize()) == 'nan':

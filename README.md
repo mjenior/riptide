@@ -22,6 +22,7 @@ Keaty TC and Jensen PA (2019). gapsplit: Efficient random sampling for non-conve
 >=cobra-0.15.3
 >=pandas-0.24.1
 >=symengine-0.4.0
+>>=scipy-1.3.0
 ```
 
 ## Installation
@@ -84,7 +85,7 @@ fraction : float
     Default is 0.8
 minimum : float
 	Minimum linear coefficient allowed during weight calculation for pFBA
-	Default is 0.0001
+	Default is None
 conservative : bool
     Conservatively remove inactive reactions based on genes
     Default is False
@@ -126,8 +127,8 @@ RIPTiDe completed in 22 seconds
 - **flux_samples** - Flux sampling pandas object from constrained model
 - **flux_variability** - Flux variability analysis pandas object from constrained model
 - **fraction_of_optimum** - Minimum specified percentage of optimal objective flux during contextualization
-- **user_defined** - User defined reactions in a 2 element list that either were included or excluded - [included reactions, excluded reaction]
-
+- **user_defined** - User defined reactions in a 2 element list that either were included or excluded
+- **concordance** - Dictionary of linear coefficients and median fluxes from sampling, as well as Spear correlation results
 
 ## Additional Information
 
