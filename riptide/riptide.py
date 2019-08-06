@@ -288,8 +288,11 @@ def _calc_concordance(flux_samples, coefficient_dict):
 	concordance_dict = {}
 
 	for rxn in coefficient_dict.keys():
-		curr_flux = median(list(flux_samples[rxn]))
-		flux_medians.append(curr_flux)
+		try:
+			curr_flux = median(list(flux_samples[rxn]))
+			flux_medians.append(curr_flux)
+		except:
+			continue
 		curr_coeff = coefficient_dict[rxn]
 		coefficients.append(curr_coeff)
 		concordance_dict[rxn] = [curr_coeff, curr_flux]
