@@ -179,11 +179,11 @@ def _assign_coefficients(raw_transcription_dict, model, minimum, norm):
         except KeyError:
             continue
 
-    # Perform RPK normalization if specified
+    # Perform RPM normalization if specified
     if norm == True:
     	total_transcript = float(sum(transcription_dict.values()))
     	for gene in transcription_dict.keys():
-    		new_abund = (transcription_dict[gene] / total_transcript) * 1000.0
+    		new_abund = (transcription_dict[gene] / total_transcript) * 1000000.0
     		new_abund = round(new_abund, 3)
     		transcription_dict[gene] = new_abund
 
@@ -289,7 +289,7 @@ def _calc_concordance(flux_samples, coefficient_dict):
 
 	for rxn in coefficient_dict.keys():
 		try:
-			curr_flux = median(list(flux_samples[rxn]))
+			curr_flux = abs(median(list(flux_samples[rxn])))
 			flux_medians.append(curr_flux)
 		except:
 			continue
@@ -381,9 +381,9 @@ def _operation_report(start_time, model, riptide, concordance):
         print('Flux through the objective INCREASED to ~' + str(new_ov) + ' from ' + str(old_ov) + ' (' + str(per_shift) + '% change)')
     
     # Report concordance
-    r_val = str(round(concordance['corr'][0], 2))
-    p_val = str(round(concordance['corr'][0], 3))
-    print('Contextualized model is ~' + r_val + ' concordant with a p-value of ~' + p_val + ' to the provided transcriptome')
+    r_val = str(round(concordance['corr'][0] * 100.0, 1))
+    p_val = str(round(concordance['corr'][1], 3))
+    print('Contextualized model is ~' + r_val + '% concordant (p=' + p_val + ') with the provided transcriptome')
 
     # Check that prune model can still achieve flux through the objective (just in case)
     try:
