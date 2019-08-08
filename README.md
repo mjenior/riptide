@@ -22,7 +22,7 @@ Keaty TC and Jensen PA (2019). gapsplit: Efficient random sampling for non-conve
 >=cobra-0.15.3
 >=pandas-0.24.1
 >=symengine-0.4.0
->>=scipy-1.3.0
+>=scipy-1.3.0
 ```
 
 ## Installation
@@ -78,8 +78,11 @@ model : cobra.Model
     The model to be contextualized (REQUIRED)
 transcriptome : dictionary
     Dictionary of transcript abundances, output of read_transcription_file (REQUIRED)
-samples : int 
+samples : int
     Number of flux samples to collect, default is 500
+norm : bool
+    Normalize transcript abundances using RPM calculation
+    Performed by default
 fraction : float
     Minimum percent of optimal objective value during FBA steps
     Default is 0.8
@@ -114,8 +117,9 @@ Analyzing context-specific flux distributions...
 Reactions pruned to 285 from 1129 (74.76% change)
 Metabolites pruned to 285 from 1132 (74.82% change)
 Flux through the objective DECREASED to ~54.71 from ~65.43 (16.38% change)
+Contextualized metabolism has a concordancy of 45.4% (p=0.001) with the transcriptome
 
-RIPTiDe completed in 22 seconds
+RIPTiDe completed in 31 seconds
 
 ```
 
