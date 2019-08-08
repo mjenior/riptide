@@ -56,8 +56,8 @@ def contextualize(model, transcriptome, samples = 500, norm = True,
         Minimum percent of optimal objective value during FBA steps
         Default is 0.8
     minimum : float
-	Minimum linear coefficient allowed during weight calculation for pFBA
-	Default is None
+		Minimum linear coefficient allowed during weight calculation for pFBA
+		Default is None
     conservative : bool
         Conservatively remove inactive reactions based on genes
         Default is False
@@ -82,7 +82,10 @@ def contextualize(model, transcriptome, samples = 500, norm = True,
     if len(set(transcriptome.values())) == 1:
         raise ValueError('ERROR: All transcriptomic abundances are identical! Please correct')
     fraction = float(fraction)
-    if fraction <= 0.0: fraction = 0.8
+    if fraction <= 0.0: 
+    	fraction = 0.1
+    elif fraction >= 1.0: 
+    	fraction = 0.9
     if minimum != None:
         if minimum <= 0.0: 
             minimum = 0.0001
