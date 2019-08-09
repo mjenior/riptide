@@ -56,8 +56,8 @@ def contextualize(model, transcriptome, samples = 500, norm = True,
         Minimum percent of optimal objective value during FBA steps
         Default is 0.8
     minimum : float
-	Minimum linear coefficient allowed during weight calculation for pFBA
-	Default is None
+		Minimum linear coefficient allowed during weight calculation for pFBA
+		Default is None
     conservative : bool
         Conservatively remove inactive reactions based on genes
         Default is False
@@ -82,7 +82,10 @@ def contextualize(model, transcriptome, samples = 500, norm = True,
     if len(set(transcriptome.values())) == 1:
         raise ValueError('ERROR: All transcriptomic abundances are identical! Please correct')
     fraction = float(fraction)
-    if fraction <= 0.0: fraction = 0.8
+    if fraction <= 0.0: 
+    	fraction = 0.1
+    elif fraction >= 1.0: 
+    	fraction = 0.9
     if minimum != None:
         if minimum <= 0.0: 
             minimum = 0.0001
@@ -95,7 +98,7 @@ def contextualize(model, transcriptome, samples = 500, norm = True,
     # Save parameters as part of the output object
     riptide_object.fraction_of_optimum = fraction
     riptide_object.transcriptome = transcriptome
-    riptide_object.user_defined = [include, exclude]
+    riptide_object.user_defined = {'included':include, 'excluded':exclude}
 
     # Check original model functionality
     # Partition reactions based on transcription percentile intervals, assign corresponding reaction coefficients
@@ -250,7 +253,7 @@ def _constrain_and_analyze_model(model, coefficient_dict, fraction, sampling_dep
                 max_coeff = coeff_range - float(coefficient_dict[rxn.id])
                 pfba_expr += max_coeff * rxn.forward_variable
                 pfba_expr += max_coeff * rxn.reverse_variable
-        
+
         # Set previous objective as a constraint, allow deviation
         if objective == True:
             prev_obj_val = constrained_model.slim_optimize()
@@ -305,7 +308,9 @@ def _calc_concordance(flux_samples, coefficient_dict):
         concordance_dict[rxn] = [curr_coeff, curr_flux]
 
     r_val, p_val = spearmanr(coefficients, flux_medians)
-    concordance_dict['corr'] = [r_val, p_val]
+    con_score = abs(round(r_val * 100.0, 1))
+
+    concordance_dict['concordance'] = {'rs':r_val, 'p':p_val, 'score':con_score}
     
     warnings.filterwarnings('default')
     return concordance_dict
@@ -400,14 +405,14 @@ def _operation_report(start_time, model, riptide, concordance):
             print('Flux through the objective INCREASED to ~' + str(new_ov) + ' from ' + str(old_ov) + ' (' + str(per_shift) + '% change)')
     
     # Report concordance
-    if str(concordance['corr'][0]) != 'nan':
-        con_score = str(abs(round(concordance['corr'][0] * 100.0, 1)))
-        p_val = round(concordance['corr'][1], 3)
+    if str(concordance['concordance']['rs']) != 'nan':
+        con_score = str(concordance['concordance']['score'])
+        p_val = round(concordance['concordance']['p'], 3)
         if p_val < 0.001:
             p_val = '<0.001'
         else:
-            p_val = '+' + str(p_val)
-        print('Contextualized metabolism has a concordancy of ' + con_score + '% (p' + p_val + ') with the transcriptome')
+            p_val = '=' + str(p_val)
+        print('Contextualized metabolism has a concordance score of ' + con_score + '% (p' + p_val + ')')
 
     # Run time
     seconds = round(time.time() - start_time)

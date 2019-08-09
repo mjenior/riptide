@@ -117,7 +117,7 @@ Analyzing context-specific flux distributions...
 Reactions pruned to 285 from 1129 (74.76% change)
 Metabolites pruned to 285 from 1132 (74.82% change)
 Flux through the objective DECREASED to ~54.71 from ~65.43 (16.38% change)
-Contextualized metabolism has a concordancy of 45.4% (p=0.001) with the transcriptome
+Contextualized metabolism has a concordance score of 45.4% (p=0.015)
 
 RIPTiDe completed in 31 seconds
 
@@ -131,8 +131,8 @@ RIPTiDe completed in 31 seconds
 - **flux_samples** - Flux sampling pandas object from constrained model
 - **flux_variability** - Flux variability analysis pandas object from constrained model
 - **fraction_of_optimum** - Minimum specified percentage of optimal objective flux during contextualization
-- **user_defined** - User defined reactions in a 2 element list that either were included or excluded
-- **concordance** - Dictionary of linear coefficients and median fluxes from sampling, as well as Spear correlation results
+- **user_defined** - User defined reactions in a 2 element dictionary that either were included or excluded
+- **concordance** - Dictionary of linear coefficients and median fluxes from sampling, as well as Spearman correlation results
 
 ## Additional Information
 
