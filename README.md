@@ -44,8 +44,8 @@ from riptide import *
 
 my_model = cobra.io.read_sbml_model('examples/genre.sbml')
 
-transcript_abundances_1 = riptide.read_transcription_file(read_abundances_file='examples/transcriptome1.tsv')
-transcript_abundances_2 = riptide.read_transcription_file(read_abundances_file='examples/transcriptome2.tsv')
+transcript_abundances_1 = riptide.read_transcription_file(file='examples/transcriptome1.tsv')
+transcript_abundances_2 = riptide.read_transcription_file(file='examples/transcriptome2.tsv')
 
 transcript_abundances_1 = riptide.read_transcription_file('examples/transcriptome1.tsv')
 transcript_abundances_2 = riptide.read_transcription_file('examples/transcriptome2.tsv', replicates=True)
@@ -59,7 +59,7 @@ riptide_object_2 = riptide.contextualize(model=my_model, transcriptome=transcrip
 
 **riptide.read_transcription_file()**
 ```
-read_abundances_file : string
+file : string
     User-provided file name which contains gene IDs and associated transcription values
 header : boolean
     Defines if read abundance file has a header that needs to be ignored

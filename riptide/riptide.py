@@ -83,9 +83,9 @@ def contextualize(model, transcriptome, samples = 500, norm = True,
         raise ValueError('ERROR: All transcriptomic abundances are identical! Please correct')
     fraction = float(fraction)
     if fraction <= 0.0: 
-    	fraction = 0.1
+    	fraction = 0.01
     elif fraction >= 1.0: 
-    	fraction = 0.9
+    	fraction = 0.99
     if minimum != None:
         if minimum <= 0.0: 
             minimum = 0.0001
@@ -138,12 +138,12 @@ def contextualize(model, transcriptome, samples = 500, norm = True,
 
 
 # Read in transcriptomic read abundances, default is tsv with no header 
-def read_transcription_file(read_abundances_file, header = False, replicates = False, sep = '\t'):
+def read_transcription_file(file, header = False, replicates = False, sep = '\t'):
     '''Generates dictionary of transcriptomic abundances from a file.
     
     Parameters
     ----------
-    read_abundances_file : string
+    file : string
         User-provided file name which contains gene IDs and associated transcription values
     header : boolean
         Defines if read abundance file has a header that needs to be ignored
@@ -156,7 +156,7 @@ def read_transcription_file(read_abundances_file, header = False, replicates = F
         defaults to tab (.tsv)
     '''
     abund_dict = {}
-    with open(read_abundances_file, 'r') as transcription:
+    with open(file, 'r') as transcription:
         if header == True: header_line = transcription.readline()
 
         for line in transcription:
