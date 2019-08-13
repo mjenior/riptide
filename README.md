@@ -87,8 +87,8 @@ fraction : float
     Minimum percent of optimal objective value during FBA steps
     Default is 0.8
 minimum : float
-	Minimum linear coefficient allowed during weight calculation for pFBA
-	Default is None
+    Minimum linear coefficient allowed during weight calculation for pFBA
+    Default is None
 conservative : bool
     Conservatively remove inactive reactions based on genes
     Default is False
@@ -126,13 +126,14 @@ RIPTiDe completed in 31 seconds
 ### Resulting RIPTiDe object (class) properties:
 
 - **model** - Contextualized genome-scale metabolic network reconstruction
-- **transcriptome** - Dictionary of transcriptomic abundances provided by user
-- **coefficients** - Dictionary of linear coefficients assigned to each reaction based on transcript values
+- **transcriptome** - Transcriptomic abundances provided by user
+- **minimization_coefficients** - Linear coefficients assigned for each reaction based on transcription used during flux sum minimization
+- **maximization_coefficients** - Linear coefficients for each reaction based on transcription used during flux sum maximization and flux sampling
 - **flux_samples** - Flux sampling pandas object from constrained model
 - **flux_variability** - Flux variability analysis pandas object from constrained model
 - **fraction_of_optimum** - Minimum specified percentage of optimal objective flux during contextualization
 - **user_defined** - User defined reactions in a 2 element dictionary that either were included or excluded
-- **concordance** - Dictionary of linear coefficients and median fluxes from sampling, as well as Spearman correlation results
+- **concordance** - Linear coefficients and median fluxes from sampling, as well as Spearman correlation results
 
 ## Additional Information
 
