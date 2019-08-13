@@ -20,7 +20,8 @@ class riptideClass:
     def __init__(self):
         self.model = 'NULL'
         self.transcriptome = 'NULL'
-        self.coefficients = 'NULL'
+        self.minimization_coefficients = 'NULL'
+        self.maximization_coefficients = 'NULL'
         self.flux_samples = 'NULL'
         self.flux_variability = 'NULL'
         self.fraction_of_optimum = 'NULL'
@@ -50,14 +51,14 @@ def contextualize(model, transcriptome, samples = 500, norm = True,
     samples : int 
         Number of flux samples to collect, default is 500
     norm : bool
-    	Normalize transcript abundances using RPM calculation
-    	Performed by default
+        Normalize transcript abundances using RPM calculation
+        Performed by default
     fraction : float
         Minimum percent of optimal objective value during FBA steps
         Default is 0.8
     minimum : float
-		Minimum linear coefficient allowed during weight calculation for pFBA
-		Default is None
+        Minimum linear coefficient allowed during weight calculation for pFBA
+        Default is None
     conservative : bool
         Conservatively remove inactive reactions based on genes
         Default is False
@@ -83,9 +84,9 @@ def contextualize(model, transcriptome, samples = 500, norm = True,
         raise ValueError('ERROR: All transcriptomic abundances are identical! Please correct')
     fraction = float(fraction)
     if fraction <= 0.0: 
-    	fraction = 0.01
+        fraction = 0.01
     elif fraction >= 1.0: 
-    	fraction = 0.99
+        fraction = 0.99
     if minimum != None:
         if minimum <= 0.0: 
             minimum = 0.0001
@@ -111,18 +112,19 @@ def contextualize(model, transcriptome, samples = 500, norm = True,
     blocked_rxns = blocked_rxns.difference(set(include))
     blocked_rxns = list(blocked_rxns.union(set(exclude)))
     riptide_model = _prune_model(riptide_model, blocked_rxns, conservative)
-    coefficient_dict = _assign_coefficients(transcriptome, riptide_model, minimum, norm)
-    riptide_object.coefficients = coefficient_dict
+    min_coefficient_dict, max_coefficient_dict = _assign_coefficients(transcriptome, riptide_model, minimum, norm)
+    riptide_object.minimization_coefficients = min_coefficient_dict
+    riptide_object.maximization_coefficients = max_coefficient_dict
 
     # Prune now inactive network sections based on coefficients
     print('Pruning zero flux subnetworks...')
-    rm_rxns = _constrain_and_analyze_model(riptide_model, coefficient_dict, fraction, 0, objective)
+    rm_rxns = _constrain_and_analyze_model(riptide_model, min_coefficient_dict, fraction, 0, objective)
     rm_rxns = rm_rxns.difference(set(include))
     riptide_model = _prune_model(riptide_model, rm_rxns, conservative)
 
     # Find optimal solution space based on transcription and final constraints
     print('Analyzing context-specific flux distributions...')
-    flux_samples, fva_result, concordance = _constrain_and_analyze_model(riptide_model, coefficient_dict, fraction, samples, objective)
+    flux_samples, fva_result, concordance = _constrain_and_analyze_model(riptide_model, max_coefficient_dict, fraction, samples, objective)
     riptide_object.flux_samples = flux_samples
     riptide_object.flux_variability = fva_result
     riptide_object.concordance = concordance
@@ -189,51 +191,62 @@ def _assign_coefficients(raw_transcription_dict, model, minimum, norm):
 
     # Perform RPM normalization if specified
     if norm == True:
-    	total_transcript = float(sum(transcription_dict.values()))
-    	for gene in transcription_dict.keys():
-    		new_abund = (transcription_dict[gene] / total_transcript) * 1000000.0
-    		new_abund = round(new_abund, 3)
-    		transcription_dict[gene] = new_abund
+        total_transcript = float(sum(transcription_dict.values()))
+        for gene in transcription_dict.keys():
+            new_abund = (transcription_dict[gene] / total_transcript) * 1000000.0
+            new_abund = round(new_abund, 3)
+            transcription_dict[gene] = new_abund
 
     # Calculate transcript abundance based coefficients, handle divide-by-zero errors
     abund_distribution = list(set(transcription_dict.values()))
     abund_distribution.sort()
     max_transcipt = float(max(abund_distribution)) + 1.0
     coefficients = [float(x+1.0) / max_transcipt for x in abund_distribution]
-    coefficients.reverse()
+    coefficients_rev = coefficients.copy()
+    coefficients_rev.reverse()
 
-    # Assign coefficients to abundances, don't let coefficients get too low
-    abund_coefficient_dict = {}
+    # Assign coefficients to abundances, adhere to minimum if provided by user
+    abund_min_coefficient_dict = {}
+    abund_max_coefficient_dict = {}
     for index in range(0, len(abund_distribution)):
-        curr_coefficient = coefficients[index]
-        if minimum != None:
-            if coefficients[index] < minimum: curr_coefficient = minimum
-        abund_coefficient_dict[abund_distribution[index]] = curr_coefficient
+        curr_min_coefficient = coefficients_rev[index]
+        if minimum != None: 
+            if coefficients_rev[index] < minimum: 
+                curr_min_coefficient = minimum
+        curr_max_coefficient = coefficients[index]
+        abund_min_coefficient_dict[abund_distribution[index]] = curr_min_coefficient
+        abund_max_coefficient_dict[abund_distribution[index]] = curr_max_coefficient
 
     # Assign coefficients to reactions
-    rxn_coefficient_dict = {}
+    rxn_min_coefficient_dict = {}
+    rxn_max_coefficient_dict = {}
     for gene in transcription_dict.keys():
         transcription = transcription_dict[gene]
-        coefficient = abund_coefficient_dict[transcription]
+        min_coefficient = abund_min_coefficient_dict[transcription]
+        max_coefficient = abund_max_coefficient_dict[transcription]
 
         # Assign corresponding coefficients to reactions associated with each gene
         for rxn in list(model.genes.get_by_any(gene)[0].reactions):            
-            if rxn.id in rxn_coefficient_dict.keys():
-                rxn_coefficient_dict[rxn.id].append(coefficient)
+            if rxn.id in rxn_min_coefficient_dict.keys():
+                rxn_min_coefficient_dict[rxn.id].append(min_coefficient)
+                rxn_max_coefficient_dict[rxn.id].append(max_coefficient)
             else:
-                rxn_coefficient_dict[rxn.id] = [coefficient]
+                rxn_min_coefficient_dict[rxn.id] = [min_coefficient]
+                rxn_max_coefficient_dict[rxn.id] = [max_coefficient]
     
     # Select final coefficients
     nogene_coefficient = numpy.median(coefficients)
     for rxn in model.reactions:
         try:
             # Take smallest value for reactions assigned multiple coefficients
-            rxn_coefficient_dict[rxn.id] = min(rxn_coefficient_dict[rxn.id])
+            rxn_min_coefficient_dict[rxn.id] = min(rxn_min_coefficient_dict[rxn.id])
+            rxn_max_coefficient_dict[rxn.id] = max(rxn_max_coefficient_dict[rxn.id])
         except KeyError:
-            rxn_coefficient_dict[rxn.id] = nogene_coefficient
+            rxn_min_coefficient_dict[rxn.id] = nogene_coefficient
+            rxn_max_coefficient_dict[rxn.id] = nogene_coefficient
             continue
     
-    return rxn_coefficient_dict
+    return rxn_min_coefficient_dict, rxn_max_coefficient_dict
 
 
 # Determine those reactions that carry flux in a pFBA objective set to a threshold of maximum
@@ -243,16 +256,9 @@ def _constrain_and_analyze_model(model, coefficient_dict, fraction, sampling_dep
 
         # Apply weigths to new expression
         pfba_expr = Zero
-        if sampling_depth == 0:
-            for rxn in constrained_model.reactions:
-                pfba_expr += coefficient_dict[rxn.id] * rxn.forward_variable
-                pfba_expr += coefficient_dict[rxn.id] * rxn.reverse_variable
-        else:
-            coeff_range = float(max(list(coefficient_dict.values()))) + float(min(list(coefficient_dict.values())))
-            for rxn in constrained_model.reactions:
-                max_coeff = coeff_range - float(coefficient_dict[rxn.id])
-                pfba_expr += max_coeff * rxn.forward_variable
-                pfba_expr += max_coeff * rxn.reverse_variable
+        for rxn in constrained_model.reactions:
+            pfba_expr += coefficient_dict[rxn.id] * rxn.forward_variable
+            pfba_expr += coefficient_dict[rxn.id] * rxn.reverse_variable
 
         # Set previous objective as a constraint, allow deviation
         if objective == True:
@@ -295,22 +301,17 @@ def _calc_concordance(flux_samples, coefficient_dict):
 
     flux_medians = []
     coefficients = []
-    concordance_dict = {}
 
     for rxn in coefficient_dict.keys():
         try:
-            curr_flux = abs(numpy.median(list(flux_samples[rxn])))
-            flux_medians.append(curr_flux)
+            flux_medians.append(abs(numpy.median(list(flux_samples[rxn]))))
+            coefficients.append(coefficient_dict[rxn])
         except:
             continue
-        curr_coeff = coefficient_dict[rxn]
-        coefficients.append(curr_coeff)
-        concordance_dict[rxn] = [curr_coeff, curr_flux]
-
+        
     r_val, p_val = spearmanr(coefficients, flux_medians)
     con_score = abs(round(r_val * 100.0, 1))
-
-    concordance_dict['concordance'] = {'rs':r_val, 'p':p_val, 'score':con_score}
+    concordance_dict = {'rho':r_val, 'p':p_val, 'score':con_score}
     
     warnings.filterwarnings('default')
     return concordance_dict
@@ -405,14 +406,18 @@ def _operation_report(start_time, model, riptide, concordance):
             print('Flux through the objective INCREASED to ~' + str(new_ov) + ' from ' + str(old_ov) + ' (' + str(per_shift) + '% change)')
     
     # Report concordance
-    if str(concordance['concordance']['rs']) != 'nan':
-        con_score = str(concordance['concordance']['score'])
-        p_val = round(concordance['concordance']['p'], 3)
-        if p_val < 0.001:
-            p_val = '<0.001'
+    if str(concordance['rho']) != 'nan':
+        con_score = str(concordance['score'])
+        p_val = round(concordance['p'], 3)
+        if p_val <= 0.001:
+            p_val = '<0.001 ***'
+        elif p_val <= 0.01:
+            p_val = '=' + str(p_val) + ' **'
+        elif p_val <= 0.05:
+            p_val = '=' + str(p_val) + ' *'
         else:
-            p_val = '=' + str(p_val)
-        print('Contextualized metabolism has a concordance score of ' + con_score + '% (p' + p_val + ')')
+            p_val = '=' + str(p_val) + ' ns'
+        print('Contextualized GENRE has a concordance of ' + con_score + '% (p' + p_val + ')')
 
     # Run time
     seconds = round(time.time() - start_time)
