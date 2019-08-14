@@ -99,7 +99,7 @@ objective : bool
     Sets previous objective function as a constraint with minimum flux equal to user input fraction
     Default is True
 set_bounds : bool
-    Uses flax variability analysis results from constrained model to set new bounds for all equations
+    Uses flax variability analysis results from constrained model to set new bounds for all reactions
     Default is True
 include : list
     List of reaction ID strings for forced inclusion in final model
