@@ -117,9 +117,9 @@ Analyzing context-specific flux distributions...
 Reactions pruned to 285 from 1129 (74.76% change)
 Metabolites pruned to 285 from 1132 (74.82% change)
 Flux through the objective DECREASED to ~54.71 from ~65.43 (16.38% change)
-Contextualized GENRE has a concordance of 45.4% (p=0.005)
+Contextualized GENRE is concordant with the transcriptome (p=0.003)
 
-RIPTiDe completed in 31 seconds
+RIPTiDe completed in 15 seconds
 
 ```
 
@@ -127,10 +127,10 @@ RIPTiDe completed in 31 seconds
 
 - **model** - Contextualized genome-scale metabolic network reconstruction
 - **transcriptome** - Transcriptomic abundances provided by user
-- **minimization_coefficients** - Linear coefficients assigned for each reaction based on transcription used during flux sum minimization
-- **maximization_coefficients** - Linear coefficients for each reaction based on transcription used during flux sum maximization and flux sampling
-- **flux_samples** - Flux sampling pandas object from constrained model
-- **flux_variability** - Flux variability analysis pandas object from constrained model
+- **minimization_coefficients** - Linear coefficients used during flux sum minimization
+- **maximization_coefficients** - Linear coefficients for each reaction based used during flux sampling
+- **flux_samples** - Flux samples from constrained model
+- **flux_variability** - Flux variability analysis from constrained model
 - **fraction_of_optimum** - Minimum specified percentage of optimal objective flux during contextualization
 - **user_defined** - User defined reactions in a 2 element dictionary that either were included or excluded
 - **concordance** - Spearman correlation results between linear coefficients and median fluxes from sampling

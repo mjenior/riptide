@@ -407,17 +407,22 @@ def _operation_report(start_time, model, riptide, concordance):
     
     # Report concordance
     if str(concordance['rho']) != 'nan':
-        con_score = str(concordance['score'])
         p_val = round(concordance['p'], 3)
-        if p_val <= 0.001:
-            p_val = '<0.001 ***'
+        if p_val < 0.001:
+            p_val = 'p<0.001 ***'
+            print('Contextualized GENRE is concordant with the transcriptome (' + p_val + ')')
         elif p_val <= 0.01:
-            p_val = '=' + str(p_val) + ' **'
+            p_val = 'p=' + str(p_val) + ' **'
+            print('Contextualized GENRE is concordant with the transcriptome (' + p_val + ')')
         elif p_val <= 0.05:
-            p_val = '=' + str(p_val) + ' *'
+            p_val = 'p=' + str(p_val) + ' *'
+            print('Contextualized GENRE is concordant with the transcriptome (' + p_val + ')')
         else:
-            p_val = '=' + str(p_val) + ' ns'
-        print('Contextualized GENRE has a concordance of ' + con_score + '% (p' + p_val + ')')
+            p_val = 'p=' + str(p_val) + ' ns'
+            print('WARNING: Contextualized GENRE is NOT concordant with the transcriptome (' + p_val + ')')
+    else:
+    	print('WARNING: Contextualized GENRE is NOT concordant with the transcriptome')
+
 
     # Run time
     seconds = round(time.time() - start_time)
@@ -434,58 +439,18 @@ def _operation_report(start_time, model, riptide, concordance):
 
 #-----------------------------------------------------------------#
 
-'''
-gapsplit flux sampler
-Keaty TC & Jensen PA (2019). gapsplit: Efficient random sampling for non-convex constraint-based models.
-bioRxiv 652917; doi: https://doi.org/10.1101/652917 
-'''
+# gapsplit flux sampler
+# Keaty TC & Jensen PA (2019). gapsplit: Efficient random sampling for non-convex constraint-based models.
+# bioRxiv 652917; doi: https://doi.org/10.1101/652917 
 
-def _gapsplit(
-        model, 
-        n=500, 
-        max_tries=1000,
-        primary_tol=0.001,
-        secondary_frac=0.05,
-        min_range=1e-5,
-        enforce_range=True):
-    """Randomly sample a COBRA model.
+def _gapsplit(model, n=500):
 
-    Parameters
-    ----------
-    model: cobra.Model
-        The model to sample. The model will not be modified during sampling.
-    n: integer, default=500
-        Number of samples to generate
-    max_tries: integer, optional, default=1000
-        Sampling attempts that return infeasible or unbounded solutions are
-        discarded. Thus the total number of optimizations may exceed `n` for
-        difficult models. `max_tries` limits the total number of attempts. If
-        None (default), gapsplit will continue until `n` feasible samples are
-        found.
-    primary_tol: float, optional, default=0.001
-        The primary target is split by setting the upper and lower bounds to
-        the midway point of the max gap. The bounds are set to within +/-
-        `primary_tol` times the width of the gap to avoid infeasible solutions
-        due to numerical issues.
-    secondary_frac: float, optional, default=0.05
-        Fraction of model variables randomly chosen as secondary targets during
-        each iteration. Default is 0.05 (5% of reactions). If 0, no secondary
-        targeting is used; this may decrease coverage but improves runtime for
-        numerically difficult models.
-    min_range: float, optional, default=1e-5
-        Variables are targeted only if their feasible range is larger than
-        this value.
-    enforce_range: boolean, optional, default=True
-        If true (default), round solutions to fall within the feasible range.
-        This prevents small deviations outside the feasible range from causing
-        small decreases in coverage.
-
-    Returns
-    -------
-    pandas.DataFrame
-        A data frame with rows = samples and columns = reactions. This is the
-        same format as the other cobrapy samplers.
-    """
+    # Define a few more variables
+    max_tries=1000
+    primary_tol=0.001
+    secondary_frac=0.05
+    min_range=1e-5
+    enforce_range=True
 
     warnings.filterwarnings('ignore') # Handle uninformative infeasible warning
 
@@ -547,7 +512,6 @@ def _generate_sample(
     with model:
         model.reactions[primary_var].lower_bound = primary_lb
         model.reactions[primary_var].upper_bound = primary_ub
-        #model.objective = model.problem.Objective(0)
         model.objective = Zero
         solution = model.optimize()
         if solution.status != 'optimal':
@@ -558,8 +522,6 @@ def _generate_sample(
 
 def _maxgap(points, fva):
     # points has rows = samples, columns = variables
-
-    # make a copy because we're going to sort the columns
     points = points.copy()
     points = numpy.vstack((fva.minimum, points, fva.maximum))
     points.sort(0)
