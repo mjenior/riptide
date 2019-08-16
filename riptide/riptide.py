@@ -406,20 +406,16 @@ def _operation_report(start_time, model, riptide, concordance):
             print('Flux through the objective INCREASED to ~' + str(new_ov) + ' from ' + str(old_ov) + ' (' + str(per_shift) + '% change)')
     
     # Report concordance
-    if str(concordance['rho']) != 'nan':
-        p_val = round(concordance['p'], 3)
-        if p_val < 0.001:
+    if concordance['rho'] > 0 and concordance['p'] <= 0.05:
+        if concordance['p'] < 0.001:
             p_val = 'p<0.001 ***'
             print('Contextualized GENRE is concordant with the transcriptome (' + p_val + ')')
-        elif p_val <= 0.01:
-            p_val = 'p=' + str(p_val) + ' **'
+        elif concordance['p'] <= 0.01:
+            p_val = 'p=' + str(round(concordance['p'], 3)) + ' **'
             print('Contextualized GENRE is concordant with the transcriptome (' + p_val + ')')
-        elif p_val <= 0.05:
-            p_val = 'p=' + str(p_val) + ' *'
+        elif concordance['p'] <= 0.05:
+            p_val = 'p=' + str(round(concordance['p'], 3)) + ' *'
             print('Contextualized GENRE is concordant with the transcriptome (' + p_val + ')')
-        else:
-            p_val = 'p=' + str(p_val) + ' ns'
-            print('WARNING: Contextualized GENRE is NOT concordant with the transcriptome (' + p_val + ')')
     else:
     	print('WARNING: Contextualized GENRE is NOT concordant with the transcriptome')
 
