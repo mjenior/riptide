@@ -44,9 +44,6 @@ from riptide import *
 
 my_model = cobra.io.read_sbml_model('examples/genre.sbml')
 
-transcript_abundances_1 = riptide.read_transcription_file(file='examples/transcriptome1.tsv')
-transcript_abundances_2 = riptide.read_transcription_file(file='examples/transcriptome2.tsv')
-
 transcript_abundances_1 = riptide.read_transcription_file('examples/transcriptome1.tsv')
 transcript_abundances_2 = riptide.read_transcription_file('examples/transcriptome2.tsv', replicates=True)
 

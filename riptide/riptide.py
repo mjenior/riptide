@@ -406,7 +406,7 @@ def _operation_report(start_time, model, riptide, concordance):
             print('Flux through the objective INCREASED to ~' + str(new_ov) + ' from ' + str(old_ov) + ' (' + str(per_shift) + '% change)')
     
     # Report concordance
-    if concordance['rho'] > 0 and concordance['p'] <= 0.05:
+    if concordance['rho'] > 0.0 and concordance['p'] <= 0.05:
         if concordance['p'] < 0.001:
             p_val = 'p<0.001 ***'
             print('Contextualized GENRE is concordant with the transcriptome (' + p_val + ')')
@@ -517,7 +517,6 @@ def _generate_sample(
 
 
 def _maxgap(points, fva):
-    # points has rows = samples, columns = variables
     points = points.copy()
     points = numpy.vstack((fva.minimum, points, fva.maximum))
     points.sort(0)
