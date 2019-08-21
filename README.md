@@ -8,7 +8,7 @@ Transcriptomic analyses of bacteria have become instrumental to our understandin
 
 Please cite when using:
 ```
-Jenior ML, Moutinho TJ, and Papin JA. (2019). Parsimonious transcript data integration improves context-specific predictions of bacterial metabolism in complex environments. bioRxiv 637124; doi: https://doi.org/10.1101/637124
+Jenior ML, Moutinho TJ, and Papin JA. (2019). Transcriptome-guided parsimonious flux analysis improves predictions with metabolic networks in complex environments. bioRxiv 637124; doi: https://doi.org/10.1101/637124
 ```
 
 Utilizes python implementation of the gapsplit flux sampler. Please also cite:
