@@ -8,6 +8,7 @@ import cobra
 import pandas
 import warnings
 import symengine
+import itertools
 from cobra.util import solver
 from scipy.stats import spearmanr
 from optlang.symbolics import Zero
@@ -32,7 +33,7 @@ class riptideClass:
 # Create context-specific model based on transcript distribution
 def contextualize(model, transcriptome, samples = 500, norm = True,
     fraction = 0.8, minimum = None, conservative = False, objective = True, 
-    set_bounds = True, include = [], exclude = []):
+    set_bounds = True, tasks = [], exclude = []):
 
     '''Reaction Inclusion by Parsimony and Transcriptomic Distribution or RIPTiDe
     
@@ -68,8 +69,8 @@ def contextualize(model, transcriptome, samples = 500, norm = True,
     set_bounds : bool
         Uses flax variability analysis results from constrained model to set new bounds for all equations
         Default is False
-    include : list
-        List of reaction ID strings for forced inclusion in final model
+    tasks : list
+        List of reaction ID strings for forced inclusion in final model (metabolic tasks)
     exclude : list
         List of reaction ID strings for forced exclusion from final model
     '''
@@ -99,17 +100,16 @@ def contextualize(model, transcriptome, samples = 500, norm = True,
     # Save parameters as part of the output object
     riptide_object.fraction_of_optimum = fraction
     riptide_object.transcriptome = transcriptome
-    riptide_object.user_defined = {'included':include, 'excluded':exclude}
 
     # Check original model functionality
     # Partition reactions based on transcription percentile intervals, assign corresponding reaction coefficients
     print('\nInitializing model and integrating transcriptomic data...')
     riptide_model = copy.deepcopy(model)
     riptide_model.id = str(riptide_model.id) + '_riptide'
+    riptide_object.user_defined = {'tasks':tasks, 'excluded':exclude}
 
     # Remove totally blocked reactions to speed up subsequent sections
-    blocked_rxns = set(find_blocked_reactions(riptide_model))
-    blocked_rxns = blocked_rxns.difference(set(include))
+    blocked_rxns = list(blocked_rxns.difference(set(tasks)))
     blocked_rxns = list(blocked_rxns.union(set(exclude)))
     riptide_model = _prune_model(riptide_model, blocked_rxns, conservative)
     min_coefficient_dict, max_coefficient_dict = _assign_coefficients(transcriptome, riptide_model, minimum, norm)
@@ -118,13 +118,12 @@ def contextualize(model, transcriptome, samples = 500, norm = True,
 
     # Prune now inactive network sections based on coefficients
     print('Pruning zero flux subnetworks...')
-    rm_rxns = _constrain_and_analyze_model(riptide_model, min_coefficient_dict, fraction, 0, objective)
-    rm_rxns = rm_rxns.difference(set(include))
+    rm_rxns = _constrain_and_analyze_model(riptide_model, min_coefficient_dict, fraction, 0, objective, tasks)
     riptide_model = _prune_model(riptide_model, rm_rxns, conservative)
 
     # Find optimal solution space based on transcription and final constraints
     print('Analyzing context-specific flux distributions...')
-    flux_samples, fva_result, concordance = _constrain_and_analyze_model(riptide_model, max_coefficient_dict, fraction, samples, objective)
+    flux_samples, fva_result, concordance = _constrain_and_analyze_model(riptide_model, max_coefficient_dict, fraction, samples, objective, tasks)
     riptide_object.flux_samples = flux_samples
     riptide_object.flux_variability = fva_result
     riptide_object.concordance = concordance
@@ -176,7 +175,6 @@ def read_transcription_file(file, header = False, replicates = False, sep = '\t'
                 abund_dict[gene] = abundance
 
     return abund_dict
-
 
 # Converts a dictionary of transcript abundances to reaction linear coefficients
 def _assign_coefficients(raw_transcription_dict, model, minimum, norm):
@@ -238,9 +236,15 @@ def _assign_coefficients(raw_transcription_dict, model, minimum, norm):
     nogene_coefficient = numpy.median(coefficients)
     for rxn in model.reactions:
         try:
-            # Take smallest value for reactions assigned multiple coefficients
-            rxn_min_coefficient_dict[rxn.id] = min(rxn_min_coefficient_dict[rxn.id])
-            rxn_max_coefficient_dict[rxn.id] = max(rxn_max_coefficient_dict[rxn.id])
+            # Parse GPRs
+            curr_gpr = str(rxn.gene_reaction_rule).upper()
+            if ' AND ' in curr_gpr:
+            	rxn_min_coefficient_dict[rxn.id] = max(rxn_min_coefficient_dict[rxn.id])
+            	rxn_max_coefficient_dict[rxn.id] = min(rxn_max_coefficient_dict[rxn.id])
+            else:
+            	rxn_min_coefficient_dict[rxn.id] = min(rxn_min_coefficient_dict[rxn.id])
+            	rxn_max_coefficient_dict[rxn.id] = max(rxn_max_coefficient_dict[rxn.id])
+
         except KeyError:
             rxn_min_coefficient_dict[rxn.id] = nogene_coefficient
             rxn_max_coefficient_dict[rxn.id] = nogene_coefficient
@@ -250,22 +254,32 @@ def _assign_coefficients(raw_transcription_dict, model, minimum, norm):
 
 
 # Determine those reactions that carry flux in a pFBA objective set to a threshold of maximum
-def _constrain_and_analyze_model(model, coefficient_dict, fraction, sampling_depth, objective):
+def _constrain_and_analyze_model(model, coefficient_dict, fraction, sampling_depth, objective, tasks):
     
     with model as constrained_model:
+
+    	# Set previous objective as a constraint, allow deviation
+        if objective == True:
+            prev_obj_val = constrained_model.slim_optimize()
+            prev_obj_constraint = constrained_model.problem.Constraint(constrained_model.objective.expression, lb=prev_obj_val*fraction, ub=prev_obj_val)
+            constrained_model.add_cons_vars([prev_obj_constraint])
+            constrained_model.solver.update()
+
+        # Include metabolic task constraints
+        if len(tasks) >= 1:
+        	for rxn in tasks:
+        		with constrained_model as m:
+        			task_obj_val = m.slim_optimize()
+        			task_constraint = m.problem.Constraint(m.objective.expression, lb=task_obj_val*0.01, ub=task_obj_val)
+        			task_constraints.append(task_constraint)
+        	constrained_model.add_cons_vars(task_constraints)
+            constrained_model.solver.update()
 
         # Apply weigths to new expression
         pfba_expr = Zero
         for rxn in constrained_model.reactions:
             pfba_expr += coefficient_dict[rxn.id] * rxn.forward_variable
             pfba_expr += coefficient_dict[rxn.id] * rxn.reverse_variable
-
-        # Set previous objective as a constraint, allow deviation
-        if objective == True:
-            prev_obj_val = constrained_model.slim_optimize()
-            prev_obj_constraint = constrained_model.problem.Constraint(constrained_model.objective.expression, lb=prev_obj_val*fraction, ub=prev_obj_val)
-            constrained_model.add_cons_vars([prev_obj_constraint])
-            constrained_model.solver.update()
 
         if sampling_depth == 0:
             # Determine reactions that do not carry any flux in highly constrained solution space

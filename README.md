@@ -48,7 +48,7 @@ transcript_abundances_1 = riptide.read_transcription_file('examples/transcriptom
 transcript_abundances_2 = riptide.read_transcription_file('examples/transcriptome2.tsv', replicates=True)
 
 riptide_object_1_a = riptide.contextualize(model=my_model, transcriptome=transcript_abundances_1)
-riptide_object_1_b = riptide.contextualize(model=my_model, transcriptome=transcript_abundances_1, include=['rxn1'], exclude=['rxn2','rxn3'])
+riptide_object_1_b = riptide.contextualize(model=my_model, transcriptome=transcript_abundances_1, tasks=['rxn1'], exclude=['rxn2','rxn3'])
 riptide_object_2 = riptide.contextualize(model=my_model, transcriptome=transcript_abundances_2)
 ``` 
 
@@ -98,8 +98,8 @@ objective : bool
 set_bounds : bool
     Uses flax variability analysis results from constrained model to set new bounds for all reactions
     Default is True
-include : list
-    List of reaction ID strings for forced inclusion in final model
+tasks : list
+    List of reaction ID strings for forced inclusion in final model (metabolic tasks)
 exclude : list
     List of reaction ID strings for forced exclusion from final model
 ```
