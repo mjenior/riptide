@@ -272,8 +272,9 @@ def _constrain_and_analyze_model(model, coefficient_dict, fraction, sampling_dep
         			task_obj_val = m.slim_optimize()
         			task_constraint = m.problem.Constraint(m.objective.expression, lb=task_obj_val*0.01, ub=task_obj_val)
         			task_constraints.append(task_constraint)
+
         	constrained_model.add_cons_vars(task_constraints)
-            constrained_model.solver.update()
+        	constrained_model.solver.update()
 
         # Apply weigths to new expression
         pfba_expr = Zero
