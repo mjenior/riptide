@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: riptide
-Version: 2.3.6
+Version: 2.3.7
 Summary: Reaction Inclusion by Parsimony and Transcript Distribution (RIPTiDe)
 Home-page: https://github.com/mjenior/riptide
 Author: Matthew Jenior
@@ -110,6 +110,9 @@ Description: # RIPTiDe
             List of reaction ID strings for forced inclusion in final model (metabolic tasks)
         exclude : list
             List of reaction ID strings for forced exclusion from final model
+        gpr : bool
+            Determines if GPR rules will be considered during coefficient assignment
+            Default is False
         ```
         
         ### Example stdout report:

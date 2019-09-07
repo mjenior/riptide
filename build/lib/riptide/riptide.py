@@ -28,12 +28,13 @@ class riptideClass:
         self.fraction_of_optimum = 'NULL'
         self.user_defined = 'NULL'
         self.concordance = 'NULL'
+        self.GPRs_considered = 'NULL'
 
 
 # Create context-specific model based on transcript distribution
 def contextualize(model, transcriptome, samples = 500, norm = True,
     fraction = 0.8, minimum = None, conservative = False, objective = True, 
-    set_bounds = True, tasks = [], exclude = []):
+    set_bounds = True, tasks = [], exclude = [], gpr = False):
 
     '''Reaction Inclusion by Parsimony and Transcriptomic Distribution or RIPTiDe
     
@@ -73,6 +74,9 @@ def contextualize(model, transcriptome, samples = 500, norm = True,
         List of reaction ID strings for forced inclusion in final model (metabolic tasks)
     exclude : list
         List of reaction ID strings for forced exclusion from final model
+    gpr : bool
+    	Determines if GPR rules will be considered during coefficient assignment
+    	Default is False
     '''
 
     start_time = time.time()
@@ -100,6 +104,7 @@ def contextualize(model, transcriptome, samples = 500, norm = True,
     # Save parameters as part of the output object
     riptide_object.fraction_of_optimum = fraction
     riptide_object.transcriptome = transcriptome
+    riptide_object.GPRs_considered == gpr
 
     # Check original model functionality
     # Partition reactions based on transcription percentile intervals, assign corresponding reaction coefficients
@@ -112,7 +117,7 @@ def contextualize(model, transcriptome, samples = 500, norm = True,
     blocked_rxns = list(blocked_rxns.difference(set(tasks)))
     blocked_rxns = list(blocked_rxns.union(set(exclude)))
     riptide_model = _prune_model(riptide_model, blocked_rxns, conservative)
-    min_coefficient_dict, max_coefficient_dict = _assign_coefficients(transcriptome, riptide_model, minimum, norm)
+    min_coefficient_dict, max_coefficient_dict = _assign_coefficients(transcriptome, riptide_model, minimum, norm, gpr)
     riptide_object.minimization_coefficients = min_coefficient_dict
     riptide_object.maximization_coefficients = max_coefficient_dict
 
@@ -177,7 +182,7 @@ def read_transcription_file(file, header = False, replicates = False, sep = '\t'
     return abund_dict
 
 # Converts a dictionary of transcript abundances to reaction linear coefficients
-def _assign_coefficients(raw_transcription_dict, model, minimum, norm):
+def _assign_coefficients(raw_transcription_dict, model, minimum, norm, gpr):
     
     # Screen transcriptomic abundances for genes that are included in model
     transcription_dict = {}
@@ -233,21 +238,27 @@ def _assign_coefficients(raw_transcription_dict, model, minimum, norm):
                 rxn_max_coefficient_dict[rxn.id] = [max_coefficient]
     
     # Select final coefficients
-    nogene_coefficient = numpy.median(coefficients)
     for rxn in model.reactions:
         try:
-            # Parse GPRs
-            curr_gpr = str(rxn.gene_reaction_rule).upper()
-            if ' AND ' in curr_gpr:
-            	rxn_min_coefficient_dict[rxn.id] = max(rxn_min_coefficient_dict[rxn.id])
-            	rxn_max_coefficient_dict[rxn.id] = min(rxn_max_coefficient_dict[rxn.id])
+            # Parse GPRs if defined by user
+            if gpr == True:
+            	curr_gpr = str(rxn.gene_reaction_rule).upper()
+            	if ' AND ' in curr_gpr:
+            		rxn_min_coefficient_dict[rxn.id] = max(rxn_min_coefficient_dict[rxn.id])
+            		rxn_max_coefficient_dict[rxn.id] = min(rxn_max_coefficient_dict[rxn.id])
+            	elif ' OR ' in curr_gpr:
+            		rxn_min_coefficient_dict[rxn.id] = min(rxn_min_coefficient_dict[rxn.id])
+            		rxn_max_coefficient_dict[rxn.id] = max(rxn_max_coefficient_dict[rxn.id])
+            	else:
+            		rxn_min_coefficient_dict[rxn.id] = numpy.median(rxn_min_coefficient_dict[rxn.id])
+            		rxn_max_coefficient_dict[rxn.id] = numpy.median(rxn_max_coefficient_dict[rxn.id])
             else:
             	rxn_min_coefficient_dict[rxn.id] = min(rxn_min_coefficient_dict[rxn.id])
             	rxn_max_coefficient_dict[rxn.id] = max(rxn_max_coefficient_dict[rxn.id])
-
+        # No gene coefficient
         except KeyError:
-            rxn_min_coefficient_dict[rxn.id] = nogene_coefficient
-            rxn_max_coefficient_dict[rxn.id] = nogene_coefficient
+            rxn_min_coefficient_dict[rxn.id] = numpy.median(coefficients)
+            rxn_max_coefficient_dict[rxn.id] = numpy.median(coefficients)
             continue
     
     return rxn_min_coefficient_dict, rxn_max_coefficient_dict

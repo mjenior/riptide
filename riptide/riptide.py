@@ -28,6 +28,7 @@ class riptideClass:
         self.fraction_of_optimum = 'NULL'
         self.user_defined = 'NULL'
         self.concordance = 'NULL'
+        self.GPRs_considered = 'NULL'
 
 
 # Create context-specific model based on transcript distribution
@@ -103,6 +104,7 @@ def contextualize(model, transcriptome, samples = 500, norm = True,
     # Save parameters as part of the output object
     riptide_object.fraction_of_optimum = fraction
     riptide_object.transcriptome = transcriptome
+    riptide_object.GPRs_considered == gpr
 
     # Check original model functionality
     # Partition reactions based on transcription percentile intervals, assign corresponding reaction coefficients
@@ -253,7 +255,7 @@ def _assign_coefficients(raw_transcription_dict, model, minimum, norm, gpr):
             else:
             	rxn_min_coefficient_dict[rxn.id] = min(rxn_min_coefficient_dict[rxn.id])
             	rxn_max_coefficient_dict[rxn.id] = max(rxn_max_coefficient_dict[rxn.id])
-
+        # No gene coefficient
         except KeyError:
             rxn_min_coefficient_dict[rxn.id] = numpy.median(coefficients)
             rxn_max_coefficient_dict[rxn.id] = numpy.median(coefficients)

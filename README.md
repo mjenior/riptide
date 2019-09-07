@@ -102,6 +102,9 @@ tasks : list
     List of reaction ID strings for forced inclusion in final model (metabolic tasks)
 exclude : list
     List of reaction ID strings for forced exclusion from final model
+gpr : bool
+    Determines if GPR rules will be considered during coefficient assignment
+    Default is False
 ```
 
 ### Example stdout report:
