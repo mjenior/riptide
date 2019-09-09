@@ -114,7 +114,8 @@ def contextualize(model, transcriptome, samples = 500, norm = True,
     riptide_object.user_defined = {'tasks':tasks, 'excluded':exclude}
 
     # Remove totally blocked reactions to speed up subsequent sections
-    blocked_rxns = list(blocked_rxns.difference(set(tasks)))
+    blocked_rxns = set(find_blocked_reactions(riptide_model))
+    blocked_rxns = blocked_rxns.difference(set(tasks))
     blocked_rxns = list(blocked_rxns.union(set(exclude)))
     riptide_model = _prune_model(riptide_model, blocked_rxns, conservative)
     min_coefficient_dict, max_coefficient_dict = _assign_coefficients(transcriptome, riptide_model, minimum, norm, gpr)
