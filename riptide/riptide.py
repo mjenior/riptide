@@ -446,7 +446,6 @@ def _operation_report(start_time, model, riptide, concordance):
     else:
     	print('WARNING: Contextualized GENRE is NOT concordant with the transcriptome')
 
-
     # Run time
     seconds = round(time.time() - start_time)
     if seconds < 60:
