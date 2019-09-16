@@ -28,7 +28,8 @@ class riptideClass:
         self.fraction_of_optimum = 'NULL'
         self.user_defined = 'NULL'
         self.concordance = 'NULL'
-        self.GPRs_considered = 'NULL'
+        self.GPR_integration = 'NULL'
+        self.shadow_prices = 'NULL'
 
 
 # Create context-specific model based on transcript distribution
@@ -104,7 +105,7 @@ def contextualize(model, transcriptome, samples = 500, norm = True,
     # Save parameters as part of the output object
     riptide_object.fraction_of_optimum = fraction
     riptide_object.transcriptome = transcriptome
-    riptide_object.GPRs_considered == gpr
+    riptide_object.GPR_integration = gpr
 
     # Check original model functionality
     # Partition reactions based on transcription percentile intervals, assign corresponding reaction coefficients
@@ -129,10 +130,11 @@ def contextualize(model, transcriptome, samples = 500, norm = True,
 
     # Find optimal solution space based on transcription and final constraints
     print('Analyzing context-specific flux distributions...')
-    flux_samples, fva_result, concordance = _constrain_and_analyze_model(riptide_model, max_coefficient_dict, fraction, samples, objective, tasks)
+    flux_samples, fva_result, concordance, shadow_prices = _constrain_and_analyze_model(riptide_model, max_coefficient_dict, fraction, samples, objective, tasks)
     riptide_object.flux_samples = flux_samples
     riptide_object.flux_variability = fva_result
     riptide_object.concordance = concordance
+    riptide_object.shadow_prices = shadow_prices
 
     # Assign new reaction bounds
     if set_bounds == True:
@@ -307,7 +309,9 @@ def _constrain_and_analyze_model(model, coefficient_dict, fraction, sampling_dep
             # Explore solution space of constrained model with flux sampling, allow deviation
             constrained_model.objective = constrained_model.problem.Objective(pfba_expr, direction='max', sloppy=True)
             constrained_model.solver.update()
-            flux_sum_obj_val = constrained_model.slim_optimize()
+            solution = constrained_model.optimize()
+            flux_sum_obj_val = solution.objective_value
+            shadow_prices = solution.shadow_prices
             flux_sum_constraint = constrained_model.problem.Constraint(pfba_expr, lb=flux_sum_obj_val*fraction, ub=flux_sum_obj_val)
             constrained_model.add_cons_vars([flux_sum_constraint])
             constrained_model.solver.update()
@@ -319,7 +323,7 @@ def _constrain_and_analyze_model(model, coefficient_dict, fraction, sampling_dep
             # Calculate concordance
             concordance = _calc_concordance(flux_samples, coefficient_dict)
 
-            return flux_samples, fva, concordance
+            return flux_samples, fva, concordance, shadow_prices
 
 
 # Find level of concordance between contextualized flux and assigned coefficients
@@ -445,7 +449,6 @@ def _operation_report(start_time, model, riptide, concordance):
             print('Contextualized GENRE is concordant with the transcriptome (' + p_val + ')')
     else:
     	print('WARNING: Contextualized GENRE is NOT concordant with the transcriptome')
-
 
     # Run time
     seconds = round(time.time() - start_time)

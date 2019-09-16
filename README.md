@@ -129,11 +129,13 @@ RIPTiDe completed in 15 seconds
 - **transcriptome** - Transcriptomic abundances provided by user
 - **minimization_coefficients** - Linear coefficients used during flux sum minimization
 - **maximization_coefficients** - Linear coefficients for each reaction based used during flux sampling
+- **shadow_prices** - Shadow prices of metabolites included in the constrained model
 - **flux_samples** - Flux samples from constrained model
 - **flux_variability** - Flux variability analysis from constrained model
 - **fraction_of_optimum** - Minimum specified percentage of optimal objective flux during contextualization
 - **user_defined** - User defined reactions in a 2 element dictionary that either were included or excluded
 - **concordance** - Spearman correlation results between linear coefficients and median fluxes from sampling
+
 
 ## Additional Information
 
