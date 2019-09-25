@@ -32,10 +32,6 @@ Installation is:
 $ pip install riptide
 ```
 
-Or from github:
-```
-$ pip install git+https://github.com/mjenior/riptide
-```
 
 ## Usage
 
@@ -105,6 +101,9 @@ exclude : list
 gpr : bool
     Determines if GPR rules will be considered during coefficient assignment
     Default is False
+threshold : float
+    Minimum flux a reaction must acheive in order to avoid pruning during flux sum minimization step
+    Default is 1e-6
 ```
 
 ### Example stdout report:
@@ -129,7 +128,6 @@ RIPTiDe completed in 15 seconds
 - **transcriptome** - Transcriptomic abundances provided by user
 - **minimization_coefficients** - Linear coefficients used during flux sum minimization
 - **maximization_coefficients** - Linear coefficients for each reaction based used during flux sampling
-- **shadow_prices** - Shadow prices of metabolites included in the constrained model
 - **flux_samples** - Flux samples from constrained model
 - **flux_variability** - Flux variability analysis from constrained model
 - **fraction_of_optimum** - Minimum specified percentage of optimal objective flux during contextualization
