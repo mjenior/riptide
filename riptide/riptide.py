@@ -33,8 +33,7 @@ class riptideClass:
 # Create context-specific model based on transcript distribution
 def contextualize(model, transcriptome, samples = 500, norm = True,
     fraction = 0.8, minimum = None, conservative = False, objective = True, 
-    set_bounds = True, tasks = [], exclude = [], gpr = False, threshold = 1e-6,
-    direct=False):
+    set_bounds = True, tasks = [], exclude = [], gpr = False, threshold = 1e-6):
 
     '''Reaction Inclusion by Parsimony and Transcriptomic Distribution or RIPTiDe
     
@@ -102,7 +101,6 @@ def contextualize(model, transcriptome, samples = 500, norm = True,
     if model.slim_optimize() < 1e-6 or str(model.slim_optimize()) == 'nan':
         raise ValueError('ERROR: Provided model objective cannot carry flux! Please correct')
     minimum_threshold = threshold
-    direct_assignment = direct # do not use, not skewed enough of a distribution
 
     # Save parameters as part of the output object
     riptide_object.fraction_of_optimum = fraction
@@ -121,7 +119,7 @@ def contextualize(model, transcriptome, samples = 500, norm = True,
     blocked_rxns = blocked_rxns.difference(set(tasks))
     blocked_rxns = list(blocked_rxns.union(set(exclude)))
     riptide_model = _prune_model(riptide_model, blocked_rxns, conservative)
-    min_coefficient_dict, max_coefficient_dict, gene_hits = _assign_coefficients(transcriptome, riptide_model, minimum, norm, gpr, direct_assignment)
+    min_coefficient_dict, max_coefficient_dict, gene_hits = _assign_coefficients(transcriptome, riptide_model, minimum, norm, gpr, direct_assignment=False)
     riptide_object.minimization_coefficients = min_coefficient_dict
     riptide_object.maximization_coefficients = max_coefficient_dict
     riptide_object.percent_of_mapping = gene_hits
@@ -200,6 +198,8 @@ def _assign_coefficients(raw_transcription_dict, model, minimum, norm, gpr, dire
         except KeyError:
             fail += 1.0
             continue
+    if total == fail:
+    	raise InputError('ERROR: No gene IDs in transcriptome dictionary found in model.')
     gene_hits = (float(total - fail) / total) * 100.0
     gene_hits = str(round(gene_hits, 2)) + '%'
 

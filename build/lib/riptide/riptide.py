@@ -27,6 +27,7 @@ class riptideClass:
         self.user_defined = 'NULL'
         self.concordance = 'NULL'
         self.GPR_integration = 'NULL'
+        self.percent_of_mapping = 'NULL'
 
 
 # Create context-specific model based on transcript distribution
@@ -118,9 +119,10 @@ def contextualize(model, transcriptome, samples = 500, norm = True,
     blocked_rxns = blocked_rxns.difference(set(tasks))
     blocked_rxns = list(blocked_rxns.union(set(exclude)))
     riptide_model = _prune_model(riptide_model, blocked_rxns, conservative)
-    min_coefficient_dict, max_coefficient_dict = _assign_coefficients(transcriptome, riptide_model, minimum, norm, gpr)
+    min_coefficient_dict, max_coefficient_dict, gene_hits = _assign_coefficients(transcriptome, riptide_model, minimum, norm, gpr, direct_assignment=False)
     riptide_object.minimization_coefficients = min_coefficient_dict
     riptide_object.maximization_coefficients = max_coefficient_dict
+    riptide_object.percent_of_mapping = gene_hits
 
     # Prune now inactive network sections based on coefficients
     print('Pruning zero flux subnetworks...')
@@ -183,15 +185,23 @@ def read_transcription_file(file, header = False, replicates = False, sep = '\t'
     return abund_dict
 
 # Converts a dictionary of transcript abundances to reaction linear coefficients
-def _assign_coefficients(raw_transcription_dict, model, minimum, norm, gpr):
+def _assign_coefficients(raw_transcription_dict, model, minimum, norm, gpr, direct):
     
     # Screen transcriptomic abundances for genes that are included in model
     transcription_dict = {}
+    total = 0.0
+    fail = 0.0
     for gene in model.genes:
+        total += 1.0
         try:
             transcription_dict[gene.id] = float(raw_transcription_dict[gene.id])            
         except KeyError:
+            fail += 1.0
             continue
+    if total == fail:
+    	raise InputError('ERROR: No gene IDs in transcriptome dictionary found in model.')
+    gene_hits = (float(total - fail) / total) * 100.0
+    gene_hits = str(round(gene_hits, 2)) + '%'
 
     # Perform RPM normalization if specified
     if norm == True:
@@ -204,10 +214,15 @@ def _assign_coefficients(raw_transcription_dict, model, minimum, norm, gpr):
     # Calculate transcript abundance based coefficients, handle divide-by-zero errors
     abund_distribution = list(set(transcription_dict.values()))
     abund_distribution.sort()
-    max_transcipt = float(max(abund_distribution)) + 1.0
-    coefficients = [float(x+1.0) / max_transcipt for x in abund_distribution]
-    coefficients_rev = coefficients.copy()
-    coefficients_rev.reverse()
+    max_transcript = float(max(abund_distribution)) + 1.0
+    if direct == True:
+        coefficients = [float(x+1.0) / max_transcript for x in abund_distribution]
+        coefficient_range = max(coefficients) + min(coefficients)
+        coefficients_rev = [(coefficient_range-x) for x in coefficients]
+    else:
+        coefficients = [float(x+1.0) / max_transcript for x in abund_distribution]
+        coefficients_rev = coefficients.copy()
+        coefficients_rev.reverse()
 
     # Assign coefficients to abundances, adhere to minimum if provided by user
     abund_min_coefficient_dict = {}
@@ -262,7 +277,7 @@ def _assign_coefficients(raw_transcription_dict, model, minimum, norm, gpr):
             rxn_max_coefficient_dict[rxn.id] = numpy.median(coefficients)
             continue
     
-    return rxn_min_coefficient_dict, rxn_max_coefficient_dict
+    return rxn_min_coefficient_dict, rxn_max_coefficient_dict, gene_hits
 
 
 # Determine those reactions that carry flux in a pFBA objective set to a threshold of maximum

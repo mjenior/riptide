@@ -126,6 +126,7 @@ RIPTiDe completed in 15 seconds
 
 - **model** - Contextualized genome-scale metabolic network reconstruction
 - **transcriptome** - Transcriptomic abundances provided by user
+- **percent_of_mapping** - Percent of genes in mapping file found in input GENRE
 - **minimization_coefficients** - Linear coefficients used during flux sum minimization
 - **maximization_coefficients** - Linear coefficients for each reaction based used during flux sampling
 - **flux_samples** - Flux samples from constrained model
