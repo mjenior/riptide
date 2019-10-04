@@ -119,7 +119,7 @@ def contextualize(model, transcriptome, samples = 500, norm = True,
     blocked_rxns = blocked_rxns.difference(set(tasks))
     blocked_rxns = list(blocked_rxns.union(set(exclude)))
     riptide_model = _prune_model(riptide_model, blocked_rxns, conservative)
-    min_coefficient_dict, max_coefficient_dict, gene_hits = _assign_coefficients(transcriptome, riptide_model, minimum, norm, gpr, direct_assignment=False)
+    min_coefficient_dict, max_coefficient_dict, gene_hits = _assign_coefficients(transcriptome, riptide_model, minimum, norm, gpr)
     riptide_object.minimization_coefficients = min_coefficient_dict
     riptide_object.maximization_coefficients = max_coefficient_dict
     riptide_object.percent_of_mapping = gene_hits
@@ -185,7 +185,7 @@ def read_transcription_file(file, header = False, replicates = False, sep = '\t'
     return abund_dict
 
 # Converts a dictionary of transcript abundances to reaction linear coefficients
-def _assign_coefficients(raw_transcription_dict, model, minimum, norm, gpr, direct):
+def _assign_coefficients(raw_transcription_dict, model, minimum, norm, gpr):
     
     # Screen transcriptomic abundances for genes that are included in model
     transcription_dict = {}
@@ -198,8 +198,9 @@ def _assign_coefficients(raw_transcription_dict, model, minimum, norm, gpr, dire
         except KeyError:
             fail += 1.0
             continue
+    # Check if any genes were found
     if total == fail:
-    	raise InputError('ERROR: No gene IDs in transcriptome dictionary found in model.')
+    	raise LookupError('ERROR: No gene IDs in transcriptome dictionary found in model.')
     gene_hits = (float(total - fail) / total) * 100.0
     gene_hits = str(round(gene_hits, 2)) + '%'
 
@@ -212,6 +213,7 @@ def _assign_coefficients(raw_transcription_dict, model, minimum, norm, gpr, dire
             transcription_dict[gene] = new_abund
 
     # Calculate transcript abundance based coefficients, handle divide-by-zero errors
+    direct = False
     abund_distribution = list(set(transcription_dict.values()))
     abund_distribution.sort()
     max_transcript = float(max(abund_distribution)) + 1.0
