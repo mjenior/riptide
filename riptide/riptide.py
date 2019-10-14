@@ -30,6 +30,94 @@ class riptideClass:
         self.percent_of_mapping = 'NULL'
 
 
+# Read in transcriptomic read abundances, default is tsv with no header 
+def read_transcription_file(file, header = False, replicates = False, sep = '\t', 
+	binning = False, quant_max=0.9, quant_min=0.5, step = 0.1):
+    '''Generates dictionary of transcriptomic abundances from a file.
+    
+    Parameters
+    ----------
+    file : string
+        User-provided file name which contains gene IDs and associated transcription values
+    header : boolean
+        Defines if read abundance file has a header that needs to be ignored
+        default is no header
+    replicates : boolean
+        Defines if read abundances contains replicates and medians require calculation
+        default is no replicates
+    sep : string
+        Defines what character separates entries on each line
+        defaults to tab (.tsv)
+    binning : boolean
+		Perform discrete binning of transcript abundances into quantils
+		default is False
+	quant_max : float
+		Largest quantile to consider
+		default is 0.9
+	quant_min : float
+		Largest quantile to consider
+		default is 0.5
+	step : float
+		Step size for parsing quantiles
+		default is 0.125
+    '''
+    abund_dict = {}
+    with open(file, 'r') as transcription:
+        if header == True: header_line = transcription.readline()
+
+        for line in transcription:
+            line = line.split(sep)
+            gene = str(line[0])
+            
+            if replicates == True:
+                abundance = float(numpy.median([float(x) for x in line[1:]]))
+            else:
+                abundance = float(line[1])
+            
+            if gene in abund_dict.keys():
+                abund_dict[gene] += abundance
+            else:
+                abund_dict[gene] = abundance
+
+    if binning != False:
+    	print('Performing transcript abundace binning by quantile...')
+    	abund_dict = _assign_quantiles(abund_dict)
+
+    return abund_dict
+
+
+# Creates transcription abundances catagories based on quantiles - optional
+def _assign_quantiles(transcription, quant_max=0.9, quant_min=0.5, step = 0.125):
+
+	if quant_max >= 1.0 or quant_min <= 0.0:
+		raise ValueError('ERROR: Quantile range values must be between 1.0 and 0.0! Please correct')
+	elif step >= 1.0 or step <= 0.0:
+		raise ValueError('ERROR: Quantile step must be between 1.0 and 0.0! Please correct')
+
+	abundances = list(transcription.values())
+	abundances.sort()
+
+	thresholds = [max(abundances)]
+	while quant_max >= quant_min:
+		if quant_max <= 0.0: quant_max = 0.01
+		thresholds.append(numpy.quantile(abundances, quant_max))
+		quant_max -= step
+	thresholds.sort()
+
+	# Identifies which quantile each transcript abundance is in and assigns the largest value in that range instead
+	for gene in transcription.keys():
+		abund = transcription[gene]
+
+		if abund in thresholds:
+            index = thresholds.index(abund)
+            transcription[gene] = thresholds[index]
+        else:
+            index = bisect.bisect_right(thresholds, abund)
+            transcription[gene] = thresholds[index]
+
+	return transcription
+
+
 # Create context-specific model based on transcript distribution
 def contextualize(model, transcriptome, samples = 500, norm = True,
     fraction = 0.8, minimum = None, conservative = False, objective = True, 
@@ -145,44 +233,6 @@ def contextualize(model, transcriptome, samples = 500, norm = True,
     _operation_report(start_time, model, riptide_model, concordance)
     return riptide_object
 
-
-# Read in transcriptomic read abundances, default is tsv with no header 
-def read_transcription_file(file, header = False, replicates = False, sep = '\t'):
-    '''Generates dictionary of transcriptomic abundances from a file.
-    
-    Parameters
-    ----------
-    file : string
-        User-provided file name which contains gene IDs and associated transcription values
-    header : boolean
-        Defines if read abundance file has a header that needs to be ignored
-        default is no header
-    replicates : boolean
-        Defines if read abundances contains replicates and medians require calculation
-        default is no replicates
-    sep : string
-        Defines what character separates entries on each line
-        defaults to tab (.tsv)
-    '''
-    abund_dict = {}
-    with open(file, 'r') as transcription:
-        if header == True: header_line = transcription.readline()
-
-        for line in transcription:
-            line = line.split(sep)
-            gene = str(line[0])
-            
-            if replicates == True:
-                abundance = float(numpy.median([float(x) for x in line[1:]]))
-            else:
-                abundance = float(line[1])
-            
-            if gene in abund_dict.keys():
-                abund_dict[gene] += abundance
-            else:
-                abund_dict[gene] = abundance
-
-    return abund_dict
 
 # Converts a dictionary of transcript abundances to reaction linear coefficients
 def _assign_coefficients(raw_transcription_dict, model, minimum, norm, gpr):
@@ -388,19 +438,28 @@ def _prune_model(new_model, rm_rxns, conserve):
     for rxn in final_rm_rxns: new_model.reactions.get_by_id(rxn).remove_from_model(remove_orphans=True)
     warnings.filterwarnings('default')
 
-    # Prune possible residual orphans, kind of sloppy but it's the only way 
-    # I've found for it to actually thoroughly remove orphans
+    # Prune orphaned nodes
+    new_model = _complete_orphan_prune(new_model)
+    
+    return new_model
+
+
+# Thoroughly remove orphan reactions and metabolites
+def _complete_orphan_prune(model):
+
     removed = 1
     while removed == 1:
         removed = 0
+
         for cpd in new_model.metabolites:
             if len(cpd.reactions) == 0:
                 cpd.remove_from_model(); removed = 1
+
         for rxn in new_model.reactions:
             if len(rxn.metabolites) == 0: 
                 rxn.remove_from_model(); removed = 1
-    
-    return new_model
+
+    return model
 
 
 # Use flux variability analysis on the constrained model to set new reaction bounds
@@ -438,15 +497,15 @@ def _operation_report(start_time, model, riptide, concordance):
     if model_check == 'works':
         new_ov = round(riptide.slim_optimize(), 2)
         old_ov = round(model.slim_optimize(), 2)
-        per_shift = 100.0 - ((float(new_ov) / float(old_ov)) * 100.0)
-        if per_shift == 0.0:
+        perc_shift = 100.0 - ((float(new_ov) / float(old_ov)) * 100.0)
+        if perc_shift == 0.0:
             pass
-        elif per_shift > 0.0:
-            per_shift = round(abs(per_shift), 2)
-            print('Flux through the objective DECREASED to ~' + str(new_ov) + ' from ~' + str(old_ov) + ' (' + str(per_shift) + '% change)')
-        elif per_shift < 0.0:
-            per_shift = round(abs(per_shift), 2)
-            print('Flux through the objective INCREASED to ~' + str(new_ov) + ' from ' + str(old_ov) + ' (' + str(per_shift) + '% change)')
+        elif perc_shift > 0.0:
+            perc_shift = round(abs(perc_shift), 2)
+            print('Flux through the objective DECREASED to ~' + str(new_ov) + ' from ~' + str(old_ov) + ' (' + str(perc_shift) + '% change)')
+        elif perc_shift < 0.0:
+            perc_shift = round(abs(perc_shift), 2)
+            print('Flux through the objective INCREASED to ~' + str(new_ov) + ' from ' + str(old_ov) + ' (' + str(perc_shift) + '% change)')
     
     # Report concordance
     if concordance['rho'] > 0.0 and concordance['p'] <= 0.05:
