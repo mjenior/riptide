@@ -110,11 +110,11 @@ def _assign_quantiles(transcription, quant_max, quant_min, step):
 		abund = transcription[gene]
 
 		if abund in thresholds:
-            index = thresholds.index(abund)
-            transcription[gene] = thresholds[index]
-        else:
-            index = bisect.bisect_right(thresholds, abund)
-            transcription[gene] = thresholds[index]
+			index = thresholds.index(abund)
+			transcription[gene] = thresholds[index]
+		else:
+			index = bisect.bisect_right(thresholds, abund)
+			transcription[gene] = thresholds[index]
 
 	return transcription
 
