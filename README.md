@@ -63,6 +63,19 @@ replicates : boolean
 sep: string
     Defines what character separates entries on each line
     defaults to tab (.tsv)
+binning : boolean
+    Perform discrete binning of transcript abundances into quantiles
+    OPTIONAL, not advised
+    default is False
+quant_max : float
+    Largest quantile to consider
+    default is 0.9
+quant_min : float
+    Largest quantile to consider
+    default is 0.5
+step : float
+    Step size for parsing quantiles
+    default is 0.125
 ```
 
 **riptide.contextualize()**

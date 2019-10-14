@@ -32,7 +32,7 @@ class riptideClass:
 
 # Read in transcriptomic read abundances, default is tsv with no header 
 def read_transcription_file(file, header = False, replicates = False, sep = '\t', 
-	binning = False, quant_max=0.9, quant_min=0.5, step = 0.1):
+	binning = False, quant_max = 0.9, quant_min = 0.5, step = 0.125):
     '''Generates dictionary of transcriptomic abundances from a file.
     
     Parameters
@@ -49,7 +49,8 @@ def read_transcription_file(file, header = False, replicates = False, sep = '\t'
         Defines what character separates entries on each line
         defaults to tab (.tsv)
     binning : boolean
-		Perform discrete binning of transcript abundances into quantils
+		Perform discrete binning of transcript abundances into quantiles
+		OPTIONAL, not advised
 		default is False
 	quant_max : float
 		Largest quantile to consider
@@ -80,14 +81,14 @@ def read_transcription_file(file, header = False, replicates = False, sep = '\t'
                 abund_dict[gene] = abundance
 
     if binning != False:
-    	print('Performing transcript abundace binning by quantile...')
-    	abund_dict = _assign_quantiles(abund_dict)
+    	print('Performing transcript abundance binning by quantile...')
+    	abund_dict = _assign_quantiles(abund_dict, quant_max, quant_min, step)
 
     return abund_dict
 
 
 # Creates transcription abundances catagories based on quantiles - optional
-def _assign_quantiles(transcription, quant_max=0.9, quant_min=0.5, step = 0.125):
+def _assign_quantiles(transcription, quant_max, quant_min, step):
 
 	if quant_max >= 1.0 or quant_min <= 0.0:
 		raise ValueError('ERROR: Quantile range values must be between 1.0 and 0.0! Please correct')
