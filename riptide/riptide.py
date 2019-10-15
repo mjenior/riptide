@@ -4,6 +4,7 @@ import copy
 import time
 import numpy
 import cobra
+import bisect
 import pandas
 import warnings
 import symengine
@@ -32,7 +33,7 @@ class riptideClass:
 
 # Read in transcriptomic read abundances, default is tsv with no header 
 def read_transcription_file(file, header = False, replicates = False, sep = '\t', 
-	binning = False, quant_max = 0.9, quant_min = 0.5, step = 0.125):
+    binning = False, quant_max = 0.9, quant_min = 0.5, step = 0.125):
     '''Generates dictionary of transcriptomic abundances from a file.
     
     Parameters
@@ -49,18 +50,18 @@ def read_transcription_file(file, header = False, replicates = False, sep = '\t'
         Defines what character separates entries on each line
         defaults to tab (.tsv)
     binning : boolean
-		Perform discrete binning of transcript abundances into quantiles
-		OPTIONAL, not advised
-		default is False
-	quant_max : float
-		Largest quantile to consider
-		default is 0.9
-	quant_min : float
-		Largest quantile to consider
-		default is 0.5
-	step : float
-		Step size for parsing quantiles
-		default is 0.125
+        Perform discrete binning of transcript abundances into quantiles
+        OPTIONAL, not advised
+        default is False
+    quant_max : float
+        Largest quantile to consider
+        default is 0.9
+    quant_min : float
+        Largest quantile to consider
+        default is 0.5
+    step : float
+        Step size for parsing quantiles
+        default is 0.125
     '''
     abund_dict = {}
     with open(file, 'r') as transcription:
@@ -81,8 +82,8 @@ def read_transcription_file(file, header = False, replicates = False, sep = '\t'
                 abund_dict[gene] = abundance
 
     if binning != False:
-    	print('Performing transcript abundance binning by quantile...')
-    	abund_dict = _assign_quantiles(abund_dict, quant_max, quant_min, step)
+        print('Performing transcript abundance binning by quantile...')
+        abund_dict = _assign_quantiles(abund_dict, quant_max, quant_min, step)
 
     return abund_dict
 
@@ -90,33 +91,33 @@ def read_transcription_file(file, header = False, replicates = False, sep = '\t'
 # Creates transcription abundances catagories based on quantiles - optional
 def _assign_quantiles(transcription, quant_max, quant_min, step):
 
-	if quant_max >= 1.0 or quant_min <= 0.0:
-		raise ValueError('ERROR: Quantile range values must be between 1.0 and 0.0! Please correct')
-	elif step >= 1.0 or step <= 0.0:
-		raise ValueError('ERROR: Quantile step must be between 1.0 and 0.0! Please correct')
+    if quant_max >= 1.0 or quant_min <= 0.0:
+        raise ValueError('ERROR: Quantile range values must be between 1.0 and 0.0! Please correct')
+    elif step >= 1.0 or step <= 0.0:
+        raise ValueError('ERROR: Quantile step must be between 1.0 and 0.0! Please correct')
 
-	abundances = list(transcription.values())
-	abundances.sort()
+    abundances = list(transcription.values())
+    abundances.sort()
 
-	thresholds = [max(abundances)]
-	while quant_max >= quant_min:
-		if quant_max <= 0.0: quant_max = 0.01
-		thresholds.append(numpy.quantile(abundances, quant_max))
-		quant_max -= step
-	thresholds.sort()
+    thresholds = [max(abundances)]
+    while quant_max >= quant_min:
+        if quant_max <= 0.0: quant_max = 0.01
+        thresholds.append(numpy.quantile(abundances, quant_max))
+        quant_max -= step
+    thresholds.sort()
 
-	# Identifies which quantile each transcript abundance is in and assigns the largest value in that range instead
-	for gene in transcription.keys():
-		abund = transcription[gene]
+    # Identifies which quantile each transcript abundance is in and assigns the largest value in that range instead
+    for gene in transcription.keys():
+        abund = transcription[gene]
 
-		if abund in thresholds:
-			index = thresholds.index(abund)
-			transcription[gene] = thresholds[index]
-		else:
-			index = bisect.bisect_right(thresholds, abund)
-			transcription[gene] = thresholds[index]
+        if abund in thresholds:
+            index = thresholds.index(abund)
+            transcription[gene] = thresholds[index]
+        else:
+            index = bisect.bisect_right(thresholds, abund)
+            transcription[gene] = thresholds[index]
 
-	return transcription
+    return transcription
 
 
 # Create context-specific model based on transcript distribution
@@ -159,7 +160,7 @@ def contextualize(model, transcriptome, samples = 500, norm = True,
         Uses flax variability analysis results from constrained model to set new bounds for all equations
         Default is False
     tasks : list
-        List of reaction ID strings for forced inclusion in final model (metabolic tasks)
+        List of gene or reaction ID strings for forced inclusion in final model (metabolic tasks)
     exclude : list
         List of reaction ID strings for forced exclusion from final model
     gpr : bool
@@ -190,6 +191,7 @@ def contextualize(model, transcriptome, samples = 500, norm = True,
     if model.slim_optimize() < 1e-6 or str(model.slim_optimize()) == 'nan':
         raise ValueError('ERROR: Provided model objective cannot carry flux! Please correct')
     minimum_threshold = threshold
+    if isinstance(tasks, list) == False: tasks = [tasks]
 
     # Save parameters as part of the output object
     riptide_object.fraction_of_optimum = fraction
@@ -251,7 +253,7 @@ def _assign_coefficients(raw_transcription_dict, model, minimum, norm, gpr):
             continue
     # Check if any genes were found
     if total == fail:
-    	raise LookupError('ERROR: No gene IDs in transcriptome dictionary found in model.')
+        raise LookupError('ERROR: No gene IDs in transcriptome dictionary found in model.')
     gene_hits = (float(total - fail) / total) * 100.0
     gene_hits = str(round(gene_hits, 2)) + '%'
 
@@ -333,61 +335,90 @@ def _assign_coefficients(raw_transcription_dict, model, minimum, norm, gpr):
     return rxn_min_coefficient_dict, rxn_max_coefficient_dict, gene_hits
 
 
+# Assemble a corrected list of metabolic tasks based on user
+def _integrate_tasks(model, tasks):
+    # Check that each task is in the model
+    screened_tasks = set()
+    for x in tasks:
+        # Genes
+        try:
+            rxns = list(model.genes.get_by_id(x).reactions)
+            rxns = set([y.id for y in rxns])
+            screened_tasks |= rxns
+        except:
+            pass
+        # Reactions
+        try:
+            rxn = model.reactions.get_by_id(x)
+            screened_tasks |= set([x])
+        except:
+            continue
+
+    # Iteratively set each as the objective and find new bounds
+    task_constraints = []
+    for rxn in screened_tasks:
+        model.objective = rxn
+        task_obj_val = model.slim_optimize()
+        task_constraint = model.problem.Constraint(model.objective.expression, lb=task_obj_val*0.01, ub=task_obj_val)
+        task_constraints.append(task_constraint)
+    
+    if len(task_constraints) == 0:
+        print('WARNING: No reactions found associated with provided task IDs')
+    else:
+        model.add_cons_vars(task_constraints)
+        model.solver.update()
+
+    return model
+
+
 # Determine those reactions that carry flux in a pFBA objective set to a threshold of maximum
 def _constrain_and_analyze_model(model, coefficient_dict, fraction, sampling_depth, objective, tasks, minimum_threshold=1e-6):
     
-    with model as constrained_model:
+    constrained_model = copy.deepcopy(model)
 
-        # Set previous objective as a constraint, allow deviation
-        if objective == True:
-            prev_obj_val = constrained_model.slim_optimize()
-            prev_obj_constraint = constrained_model.problem.Constraint(constrained_model.objective.expression, lb=prev_obj_val*fraction, ub=prev_obj_val)
-            constrained_model.add_cons_vars([prev_obj_constraint])
-            constrained_model.solver.update()
+    # Set previous objective as a constraint, allow deviation
+    if objective == True:
+        prev_obj_val = constrained_model.slim_optimize()
+        prev_obj_constraint = constrained_model.problem.Constraint(constrained_model.objective.expression, lb=prev_obj_val*fraction, ub=prev_obj_val)
+        constrained_model.add_cons_vars([prev_obj_constraint])
+        constrained_model.solver.update()
 
+    # Apply weigths to new expression
+    pfba_expr = symengine.RealDouble(0)
+    for rxn in constrained_model.reactions:
+        pfba_expr += coefficient_dict[rxn.id] * rxn.forward_variable
+        pfba_expr += coefficient_dict[rxn.id] * rxn.reverse_variable
+
+    if sampling_depth == 0:
         # Include metabolic task constraints
         if len(tasks) >= 1:
-            for rxn in tasks:
-                with constrained_model as m:
-                    task_obj_val = m.slim_optimize()
-                    task_constraint = m.problem.Constraint(m.objective.expression, lb=task_obj_val*0.01, ub=task_obj_val)
-                    task_constraints.append(task_constraint)
+            constrained_model = _integrate_tasks(constrained_model, tasks)
 
-            constrained_model.add_cons_vars(task_constraints)
-            constrained_model.solver.update()
-
-        # Apply weigths to new expression
-        pfba_expr = symengine.RealDouble(0)
-        for rxn in constrained_model.reactions:
-            pfba_expr += coefficient_dict[rxn.id] * rxn.forward_variable
-            pfba_expr += coefficient_dict[rxn.id] * rxn.reverse_variable
-
-        if sampling_depth == 0:
-            # Determine reactions that do not carry any flux in highly constrained solution space
-            constrained_model.objective = constrained_model.problem.Objective(pfba_expr, direction='min', sloppy=True)
-            constrained_model.solver.update()
-            solution = constrained_model.optimize()
-            inactive_rxns = set([rxn.id for rxn in constrained_model.reactions if abs(solution.fluxes[rxn.id]) <= minimum_threshold])
+        # Determine reactions that do not carry any flux in highly constrained solution space
+        constrained_model.objective = constrained_model.problem.Objective(pfba_expr, direction='min', sloppy=True)
+        constrained_model.solver.update()
+        solution = constrained_model.optimize()
+        inactive_rxns = set([rxn.id for rxn in constrained_model.reactions if abs(solution.fluxes[rxn.id]) <= minimum_threshold])
             
-            return inactive_rxns
+        return inactive_rxns
         
-        else:
-            # Explore solution space of constrained model with flux sampling, allow deviation
-            constrained_model.objective = constrained_model.problem.Objective(pfba_expr, direction='max', sloppy=True)
-            constrained_model.solver.update()
-            flux_sum_obj_val = constrained_model.slim_optimize()
-            flux_sum_constraint = constrained_model.problem.Constraint(pfba_expr, lb=flux_sum_obj_val*fraction, ub=flux_sum_obj_val)
-            constrained_model.add_cons_vars([flux_sum_constraint])
-            constrained_model.solver.update()
+    else:
+        # Explore solution space of constrained model with flux sampling, allow deviation
+        constrained_model.objective = constrained_model.problem.Objective(pfba_expr, direction='max', sloppy=True)
+        constrained_model.solver.update()
+        flux_sum_obj_val = constrained_model.slim_optimize()
+        flux_sum_constraint = constrained_model.problem.Constraint(pfba_expr, lb=flux_sum_obj_val*fraction, ub=flux_sum_obj_val)
+        constrained_model.add_cons_vars([flux_sum_constraint])
+        constrained_model.solver.update()
             
-            # Analyze flux ranges
-            flux_samples = _gapsplit(constrained_model, n=sampling_depth)
-            fva = flux_variability_analysis(constrained_model, fraction_of_optimum=fraction)
+        # Analyze flux ranges
+        flux_samples = _gapsplit(constrained_model, n=sampling_depth)
+        fva = flux_variability_analysis(constrained_model, fraction_of_optimum=fraction)
 
-            # Calculate concordance
-            concordance = _calc_concordance(flux_samples, coefficient_dict)
+        # Calculate concordance
+        concordance = _calc_concordance(flux_samples, coefficient_dict)
 
-            return flux_samples, fva, concordance
+        return flux_samples, fva, concordance
 
 
 # Find level of concordance between contextualized flux and assigned coefficients
@@ -452,13 +483,20 @@ def _complete_orphan_prune(model):
     while removed == 1:
         removed = 0
 
-        for cpd in new_model.metabolites:
+        # Metabolites
+        for cpd in model.metabolites:
             if len(cpd.reactions) == 0:
                 cpd.remove_from_model(); removed = 1
 
-        for rxn in new_model.reactions:
+        # Reactions
+        for rxn in model.reactions:
             if len(rxn.metabolites) == 0: 
                 rxn.remove_from_model(); removed = 1
+
+        # Genes
+        for gene in model.genes:
+            if len(gene.reactions) == 0: 
+                gene.remove_genes(); removed = 1
 
     return model
 
@@ -604,7 +642,8 @@ def _gapsplit(model, n=500):
 def _generate_sample(
         model, primary_var, primary_lb, primary_ub,
         secondary_vars=None, secondary_targets=None, secondary_weights=None):
-    """Formulate a [MI]QP to find a single solution."""
+    
+    # Formulate a [MI]QP to find a single solution
     with model:
         model.reactions[primary_var].lower_bound = primary_lb
         model.reactions[primary_var].upper_bound = primary_ub
