@@ -71,7 +71,7 @@ quant_max : float
     Largest quantile to consider
     default is 0.9
 quant_min : float
-    Largest quantile to consider
+    Smallest quantile to consider
     default is 0.5
 step : float
     Step size for parsing quantiles
@@ -131,7 +131,7 @@ Metabolites pruned to 285 from 1132 (74.82% change)
 Flux through the objective DECREASED to ~54.71 from ~65.43 (16.38% change)
 Contextualized GENRE is concordant with the transcriptome (p=0.003)
 
-RIPTiDe completed in 15 seconds
+RIPTiDe completed in 1 minute and 15 seconds
 
 ```
 

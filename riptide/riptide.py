@@ -493,11 +493,6 @@ def _complete_orphan_prune(model):
             if len(rxn.metabolites) == 0: 
                 rxn.remove_from_model(); removed = 1
 
-        # Genes
-        for gene in model.genes:
-            if len(gene.reactions) == 0: 
-                gene.remove_genes(); removed = 1
-
     return model
 
 
