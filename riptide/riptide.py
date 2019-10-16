@@ -25,10 +25,11 @@ class riptideClass:
         self.flux_samples = 'NULL'
         self.flux_variability = 'NULL'
         self.fraction_of_optimum = 'NULL'
-        self.user_defined = 'NULL'
+        self.metabolic_tasks = 'NULL'
         self.concordance = 'NULL'
         self.GPR_integration = 'NULL'
         self.percent_of_mapping = 'NULL'
+        self.defined_coefficients = 'NULL'
 
 
 # Read in transcriptomic read abundances, default is tsv with no header 
@@ -123,7 +124,7 @@ def _assign_quantiles(transcription, quant_max, quant_min, step):
 # Create context-specific model based on transcript distribution
 def contextualize(model, transcriptome, samples = 500, norm = True,
     fraction = 0.8, minimum = None, conservative = False, objective = True, 
-    set_bounds = True, tasks = [], exclude = [], gpr = False, threshold = 1e-6):
+    set_bounds = True, tasks = [], exclude = [], gpr = False, threshold = 1e-6, defined=False):
 
     '''Reaction Inclusion by Parsimony and Transcriptomic Distribution or RIPTiDe
     
@@ -169,6 +170,11 @@ def contextualize(model, transcriptome, samples = 500, norm = True,
     threshold : float
         Minimum flux a reaction must acheive in order to avoid pruning during flux sum minimization step
         Default is 1e-6
+    defined : False or list
+        User defined range of linear coeffients, needs to be defined in a list like [1, 0.5, 0.1, 0.01, 0.001]
+        Pairs best with binned abundance catagories from riptide.read_transcription_file()
+        OPTIONAL, not advised
+        Default is False
     '''
 
     start_time = time.time()
@@ -192,25 +198,29 @@ def contextualize(model, transcriptome, samples = 500, norm = True,
         raise ValueError('ERROR: Provided model objective cannot carry flux! Please correct')
     minimum_threshold = threshold
     if isinstance(tasks, list) == False: tasks = [tasks]
+    if defined != False:
+        if isinstance(defined, list) == False:
+            defined = [defined]
 
     # Save parameters as part of the output object
     riptide_object.fraction_of_optimum = fraction
     riptide_object.transcriptome = transcriptome
     riptide_object.GPR_integration = gpr
+    riptide_object.defined_coefficients = defined
 
     # Check original model functionality
     # Partition reactions based on transcription percentile intervals, assign corresponding reaction coefficients
     print('\nInitializing model and integrating transcriptomic data...')
     riptide_model = copy.deepcopy(model)
     riptide_model.id = str(riptide_model.id) + '_riptide'
-    riptide_object.user_defined = {'tasks':tasks, 'excluded':exclude}
+    riptide_object.metabolic_tasks = tasks
 
     # Remove totally blocked reactions to speed up subsequent sections
     blocked_rxns = set(find_blocked_reactions(riptide_model))
     blocked_rxns = blocked_rxns.difference(set(tasks))
     blocked_rxns = list(blocked_rxns.union(set(exclude)))
     riptide_model = _prune_model(riptide_model, blocked_rxns, conservative)
-    min_coefficient_dict, max_coefficient_dict, gene_hits = _assign_coefficients(transcriptome, riptide_model, minimum, norm, gpr)
+    min_coefficient_dict, max_coefficient_dict, gene_hits = _assign_coefficients(transcriptome, riptide_model, minimum, norm, gpr, defined)
     riptide_object.minimization_coefficients = min_coefficient_dict
     riptide_object.maximization_coefficients = max_coefficient_dict
     riptide_object.percent_of_mapping = gene_hits
@@ -238,7 +248,7 @@ def contextualize(model, transcriptome, samples = 500, norm = True,
 
 
 # Converts a dictionary of transcript abundances to reaction linear coefficients
-def _assign_coefficients(raw_transcription_dict, model, minimum, norm, gpr):
+def _assign_coefficients(raw_transcription_dict, model, minimum, norm, gpr, defined_coefficients):
     
     # Screen transcriptomic abundances for genes that are included in model
     transcription_dict = {}
@@ -276,6 +286,22 @@ def _assign_coefficients(raw_transcription_dict, model, minimum, norm, gpr):
         coefficients_rev = [(coefficient_range-x) for x in coefficients]
     else:
         coefficients = [float(x+1.0) / max_transcript for x in abund_distribution]
+        coefficients_rev = coefficients.copy()
+        coefficients_rev.reverse()
+
+    # If supplied by user, assign custom linear coefficients
+    if defined_coefficients != False:
+        defined_coefficients.sort()
+
+        # Check if same length, if not add on to one end
+        len_diff = len(defined_coefficients) - len(abund_distribution)
+        if len_diff > 0:
+            defined_coefficients = defined_coefficients[:len(defined_coefficients) - len_diff]
+        elif len_diff < 0:
+            defined_coefficients += [defined_coefficients[-1]] * abs(len_diff)
+
+        # Assign coefficient lists
+        coefficients = defined_coefficients
         coefficients_rev = coefficients.copy()
         coefficients_rev.reverse()
 
