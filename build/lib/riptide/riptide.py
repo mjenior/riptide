@@ -27,7 +27,7 @@ class riptideClass:
         self.fraction_of_optimum = 'NULL'
         self.metabolic_tasks = 'NULL'
         self.concordance = 'NULL'
-        self.GPR_integration = 'NULL'
+        self.gpr_integration = 'NULL'
         self.percent_of_mapping = 'NULL'
         self.defined_coefficients = 'NULL'
 
@@ -82,6 +82,7 @@ def read_transcription_file(file, header = False, replicates = False, sep = '\t'
             else:
                 abund_dict[gene] = abundance
 
+    # If user-defined, perform abundance binning by quantile
     if binning != False:
         print('Performing transcript abundance binning by quantile...')
         abund_dict = _assign_quantiles(abund_dict, quant_max, quant_min, step)
@@ -158,7 +159,7 @@ def contextualize(model, transcriptome, samples = 500, norm = True,
         Sets previous objective function as a constraint with minimum flux equal to user input fraction
         Default is True
     set_bounds : bool
-        Uses flax variability analysis results from constrained model to set new bounds for all equations
+        Uses flax variability analysis results from constrained model to set new bounds for all reactions
         Default is False
     tasks : list
         List of gene or reaction ID strings for forced inclusion in final model (metabolic tasks)
@@ -172,9 +173,8 @@ def contextualize(model, transcriptome, samples = 500, norm = True,
         Default is 1e-6
     defined : False or list
         User defined range of linear coeffients, needs to be defined in a list like [1, 0.5, 0.1, 0.01, 0.001]
-        Pairs best with binned abundance catagories from riptide.read_transcription_file()
-        OPTIONAL, not advised
-        Default is False
+        Works best paired with binned abundance catagories from riptide.read_transcription_file()
+        OPTIONAL, default is False
     '''
 
     start_time = time.time()
@@ -205,7 +205,7 @@ def contextualize(model, transcriptome, samples = 500, norm = True,
     # Save parameters as part of the output object
     riptide_object.fraction_of_optimum = fraction
     riptide_object.transcriptome = transcriptome
-    riptide_object.GPR_integration = gpr
+    riptide_object.gpr_integration = gpr
     riptide_object.defined_coefficients = defined
 
     # Check original model functionality
@@ -385,9 +385,14 @@ def _integrate_tasks(model, tasks):
     for rxn in screened_tasks:
         model.objective = rxn
         task_obj_val = model.slim_optimize()
-        task_constraint = model.problem.Constraint(model.objective.expression, lb=task_obj_val*0.01, ub=task_obj_val)
+        # Check sign of objective value, just in case
+        if task_obj_val > 0.0:
+            task_constraint = model.problem.Constraint(model.objective.expression, lb=task_obj_val*0.01, ub=task_obj_val)
+        elif task_obj_val < 0.0:
+            task_constraint = model.problem.Constraint(model.objective.expression, lb=task_obj_val, ub=task_obj_val*0.01)
         task_constraints.append(task_constraint)
     
+    # Check if any reactions were found in the model that correspond with supplied IDs
     if len(task_constraints) == 0:
         print('WARNING: No reactions found associated with provided task IDs')
     else:
