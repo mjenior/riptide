@@ -168,6 +168,7 @@ def contextualize(model, transcriptome, samples = 500, silent = False, exch_weig
         Default is 500
     silent  : bool
         Silences std out 
+        Default is False
     exch_weight : bool
         Weight exchange reactions the same ase adjacent transporters
         Default is False
@@ -578,14 +579,15 @@ def _operation_report(start_time, model, riptide, concordance):
     
     # Report concordance
     if concordance['rho'] > 0.0 and concordance['p'] <= 0.05:
-        if concordance['p'] < 0.0001:
+        p_val = round(concordance['p'], 3)
+        if p_val == 0.0:
             p_val = 'p<<0.001 ***'
-        elif concordance['p'] <=0.001:
-            p_val = 'p=' + str(round(concordance['p'], 3)) + ' ***'
-        elif concordance['p'] <= 0.01:
-            p_val = 'p=' + str(round(concordance['p'], 3)) + ' **'
-        elif concordance['p'] <= 0.05:
-            p_val = 'p=' + str(round(concordance['p'], 3)) + ' *'
+        elif p_val <= 0.001:
+            p_val = 'p=' + str(p_val) + ' ***'
+        elif p_val <= 0.01:
+            p_val = 'p=' + str(p_val) + ' **'
+        elif p_val <= 0.05:
+            p_val = 'p=' + str(p_val) + ' *'
         print('Context-specific metabolism correlates with transcriptome (' + p_val + ')')
 
     # Run time

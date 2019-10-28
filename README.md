@@ -82,6 +82,7 @@ silent  : bool
     Default is False
 exch_weight : bool
     Weight exchange reactions the same ase adjacent transporters
+    Default is False
 fraction : float
     Minimum percent of optimal objective value during FBA steps
     Default is 0.8

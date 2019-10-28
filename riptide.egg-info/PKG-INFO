@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: riptide
-Version: 2.5.3
+Version: 2.5.4
 Summary: Reaction Inclusion by Parsimony and Transcript Distribution (RIPTiDe)
 Home-page: https://github.com/mjenior/riptide
 Author: Matthew Jenior
@@ -90,6 +90,7 @@ Description: # RIPTiDe
             Default is False
         exch_weight : bool
             Weight exchange reactions the same ase adjacent transporters
+            Default is False
         fraction : float
             Minimum percent of optimal objective value during FBA steps
             Default is 0.8
