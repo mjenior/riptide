@@ -32,23 +32,7 @@ Installation is:
 $ pip install riptide
 ```
 
-
-## Usage
-
-```python
-from riptide import *
-
-my_model = cobra.io.read_sbml_model('examples/genre.sbml')
-
-transcript_abundances_1 = riptide.read_transcription_file('examples/transcriptome1.tsv')
-transcript_abundances_2 = riptide.read_transcription_file('examples/transcriptome2.tsv', replicates=True)
-
-riptide_object_1_a = riptide.contextualize(model=my_model, transcriptome=transcript_abundances_1)
-riptide_object_1_b = riptide.contextualize(model=my_model, transcriptome=transcript_abundances_1, tasks=['rxn1'], exclude=['rxn2','rxn3'])
-riptide_object_2 = riptide.contextualize(model=my_model, transcriptome=transcript_abundances_2)
-``` 
-
-### Additional parameters for main RIPTiDe functions:
+### Arguments for core RIPTiDe functions:
 
 **riptide.read_transcription_file()**
 ```
@@ -56,26 +40,32 @@ file : string
     User-provided file name which contains gene IDs and associated transcription values
 header : boolean
     Defines if read abundance file has a header that needs to be ignored
-    default is no header
+    Default is no header
 replicates : boolean
     Defines if read abundances contains replicates and medians require calculation
-    default is no replicates (False)
+    Default is no replicates (False)
 sep: string
     Defines what character separates entries on each line
-    defaults to tab (.tsv)
+    Defaults to tab (.tsv)
 binning : boolean
     Perform discrete binning of transcript abundances into quantiles
     OPTIONAL, not advised
-    default is False
+    Default is False
 quant_max : float
     Largest quantile to consider
-    default is 0.9
+    Default is 0.9
 quant_min : float
     Smallest quantile to consider
-    default is 0.5
+    Default is 0.5
 step : float
     Step size for parsing quantiles
-    default is 0.125
+    Default is 0.125
+norm : bool
+    Normalize transcript abundances using RPM calculation
+    Performed by default
+factor : numeric
+    Denominator for read normalization calculation
+    Default is 1e6 (RPM)
 ```
 
 **riptide.contextualize()**
@@ -85,10 +75,13 @@ model : cobra.Model
 transcriptome : dictionary
     Dictionary of transcript abundances, output of read_transcription_file (REQUIRED)
 samples : int
-    Number of flux samples to collect, default is 500
-norm : bool
-    Normalize transcript abundances using RPM calculation
-    Performed by default
+    Number of flux samples to collect
+    Default is 500
+silent  : bool
+    Silences std out 
+    Default is False
+exch_weight : bool
+    Weight exchange reactions the same ase adjacent transporters
 fraction : float
     Minimum percent of optimal objective value during FBA steps
     Default is 0.8
@@ -122,6 +115,21 @@ defined : False or list
     Works best paired with binned abundance catagories from riptide.read_transcription_file()
     OPTIONAL, default is False
 ```
+
+## Usage
+
+```python
+from riptide import *
+
+my_model = cobra.io.read_sbml_model('examples/genre.sbml')
+
+transcript_abundances_1 = riptide.read_transcription_file('examples/transcriptome1.tsv')
+transcript_abundances_2 = riptide.read_transcription_file('examples/transcriptome2.tsv', replicates=True)
+
+riptide_object_1_a = riptide.contextualize(model=my_model, transcriptome=transcript_abundances_1)
+riptide_object_1_b = riptide.contextualize(model=my_model, transcriptome=transcript_abundances_1, tasks=['rxn1'], exclude=['rxn2','rxn3'])
+riptide_object_2 = riptide.contextualize(model=my_model, transcriptome=transcript_abundances_2)
+``` 
 
 ### Example stdout report:
 ```

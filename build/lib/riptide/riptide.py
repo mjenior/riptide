@@ -34,7 +34,7 @@ class riptideClass:
 
 # Read in transcriptomic read abundances, default is tsv with no header 
 def read_transcription_file(file, header = False, replicates = False, sep = '\t', 
-    binning = False, quant_max = 0.9, quant_min = 0.5, step = 0.125):
+    binning = False, quant_max = 0.9, quant_min = 0.5, step = 0.125, norm = True, factor = 1e6):
     '''Generates dictionary of transcriptomic abundances from a file.
     
     Parameters
@@ -43,27 +43,41 @@ def read_transcription_file(file, header = False, replicates = False, sep = '\t'
         User-provided file name which contains gene IDs and associated transcription values
     header : boolean
         Defines if read abundance file has a header that needs to be ignored
-        default is no header
+        Default is no header
     replicates : boolean
         Defines if read abundances contains replicates and medians require calculation
-        default is no replicates
+        Default is no replicates
     sep : string
         Defines what character separates entries on each line
-        defaults to tab (.tsv)
+        Defaults to tab (.tsv)
     binning : boolean
         Perform discrete binning of transcript abundances into quantiles
         OPTIONAL, not advised
-        default is False
+        Default is False
     quant_max : float
         Largest quantile to consider
-        default is 0.9
+        Default is 0.9
     quant_min : float
         Largest quantile to consider
-        default is 0.5
+        Default is 0.5
     step : float
         Step size for parsing quantiles
-        default is 0.125
+        Default is 0.125
+    norm : bool
+        Normalize transcript abundances using RPM calculation
+        Performed by default
+    factor : numeric
+        Denominator for read normalization calculation
+        Default is 1e6 (RPM)
     '''
+
+    # Correct some possible user error
+    if quant_max >= 1.0 or quant_max <= 0.0: quant_max = 0.99
+    if quant_min <= 0.0 or quant_min >= 1.0: quant_min = 0.01
+    if step <= 0.0 or step >= 1.0: step = 0.125
+    if factor < 1: factor = 1e3
+
+    # Read in file
     abund_dict = {}
     with open(file, 'r') as transcription:
         if header == True: header_line = transcription.readline()
@@ -81,6 +95,14 @@ def read_transcription_file(file, header = False, replicates = False, sep = '\t'
                 abund_dict[gene] += abundance
             else:
                 abund_dict[gene] = abundance
+
+    # Perform normalization if specified
+    if norm == True:
+        total_transcript = float(sum(abund_dict.values()))
+        for gene in abund_dict.keys():
+            new_abund = (abund_dict[gene] / total_transcript) * float(factor) # RPM by default
+            new_abund = round(new_abund, 3)
+            abund_dict[gene] = new_abund
 
     # If user-defined, perform abundance binning by quantile
     if binning != False:
@@ -123,8 +145,8 @@ def _assign_quantiles(transcription, quant_max, quant_min, step):
 
 
 # Create context-specific model based on transcript distribution
-def contextualize(model, transcriptome, samples = 500, norm = True,
-    fraction = 0.8, minimum = None, conservative = False, objective = True, 
+def contextualize(model, transcriptome, samples = 500, silent = False, exch_weight = False,
+    fraction = 0.8, minimum = None, conservative = False, objective = True, additive = False,
     set_bounds = True, tasks = [], exclude = [], gpr = False, threshold = 1e-6, defined=False):
 
     '''Reaction Inclusion by Parsimony and Transcriptomic Distribution or RIPTiDe
@@ -142,10 +164,13 @@ def contextualize(model, transcriptome, samples = 500, norm = True,
         Dictionary of transcript abundances, output of read_transcription_file()
         REQUIRED
     samples : int 
-        Number of flux samples to collect, default is 500
-    norm : bool
-        Normalize transcript abundances using RPM calculation
-        Performed by default
+        Number of flux samples to collect
+        Default is 500
+    silent  : bool
+        Silences std out 
+    exch_weight : bool
+        Weight exchange reactions the same ase adjacent transporters
+        Default is False
     fraction : float
         Minimum percent of optimal objective value during FBA steps
         Default is 0.8
@@ -158,9 +183,12 @@ def contextualize(model, transcriptome, samples = 500, norm = True,
     objective : bool
         Sets previous objective function as a constraint with minimum flux equal to user input fraction
         Default is True
+    additive : bool
+        Pool transcription abundances for reactions with multiple contributing gene products
+        Default is False
     set_bounds : bool
         Uses flax variability analysis results from constrained model to set new bounds for all reactions
-        Default is False
+        Default is True
     tasks : list
         List of gene or reaction ID strings for forced inclusion in final model (metabolic tasks)
     exclude : list
@@ -210,7 +238,7 @@ def contextualize(model, transcriptome, samples = 500, norm = True,
 
     # Check original model functionality
     # Partition reactions based on transcription percentile intervals, assign corresponding reaction coefficients
-    print('\nInitializing model and integrating transcriptomic data...')
+    if silent == False: print('\nInitializing model and integrating transcriptomic data...')
     riptide_model = copy.deepcopy(model)
     riptide_model.id = str(riptide_model.id) + '_riptide'
     riptide_object.metabolic_tasks = tasks
@@ -220,144 +248,120 @@ def contextualize(model, transcriptome, samples = 500, norm = True,
     blocked_rxns = blocked_rxns.difference(set(tasks))
     blocked_rxns = list(blocked_rxns.union(set(exclude)))
     riptide_model = _prune_model(riptide_model, blocked_rxns, conservative)
-    min_coefficient_dict, max_coefficient_dict, gene_hits = _assign_coefficients(transcriptome, riptide_model, minimum, norm, gpr, defined)
+    min_coefficient_dict, max_coefficient_dict, gene_hits = _assign_coefficients(transcriptome, riptide_model, minimum, gpr, defined, additive, exch_weight)
     riptide_object.minimization_coefficients = min_coefficient_dict
     riptide_object.maximization_coefficients = max_coefficient_dict
     riptide_object.percent_of_mapping = gene_hits
 
     # Prune now inactive network sections based on coefficients
-    print('Pruning zero flux subnetworks...')
+    if silent == False: print('Pruning zero flux subnetworks...')
     rm_rxns = _constrain_and_analyze_model(riptide_model, min_coefficient_dict, fraction, 0, objective, tasks, minimum_threshold)
     riptide_model = _prune_model(riptide_model, rm_rxns, conservative)
 
     # Find optimal solution space based on transcription and final constraints
-    print('Analyzing context-specific flux distributions...')
+    if silent == False: print('Analyzing context-specific flux distributions...')
     flux_samples, fva_result, concordance = _constrain_and_analyze_model(riptide_model, max_coefficient_dict, fraction, samples, objective, tasks)
     riptide_object.flux_samples = flux_samples
     riptide_object.flux_variability = fva_result
     riptide_object.concordance = concordance
 
     # Assign new reaction bounds
-    if set_bounds == True:
-        riptide_model = _set_new_bounds(riptide_model, fva_result)
+    if set_bounds == True: riptide_model = _set_new_bounds(riptide_model, fva_result)
     riptide_object.model = riptide_model
 
     # Analyze changes introduced by RIPTiDe and return results
-    _operation_report(start_time, model, riptide_model, concordance)
+    if silent == False: _operation_report(start_time, model, riptide_model, concordance)
     return riptide_object
 
 
 # Converts a dictionary of transcript abundances to reaction linear coefficients
-def _assign_coefficients(raw_transcription_dict, model, minimum, norm, gpr, defined_coefficients):
+def _assign_coefficients(raw_transcription_dict, model, minimum, gpr, defined_coefficients, additive, exch_weight):
     
     # Screen transcriptomic abundances for genes that are included in model
-    transcription_dict = {}
+    rxn_transcript_dict = {}
     total = 0.0
     fail = 0.0
     for gene in model.genes:
         total += 1.0
         try:
-            transcription_dict[gene.id] = float(raw_transcription_dict[gene.id])            
+            current_abund = float(raw_transcription_dict[gene.id]) + 1.0
+            current_rxns = list(model.genes.get_by_id(gene.id).reactions)
+            for rxn in current_rxns:
+                try:
+                    rxn_transcript_dict[rxn.id].append(current_abund)
+                except KeyError:
+                    rxn_transcript_dict[rxn.id] = [current_abund]
         except KeyError:
             fail += 1.0
             continue
     # Check if any genes were found
-    if total == fail:
-        raise LookupError('ERROR: No gene IDs in transcriptome dictionary found in model.')
+    if total == fail: raise LookupError('ERROR: No gene IDs in transcriptome dictionary found in model.')
     gene_hits = (float(total - fail) / total) * 100.0
     gene_hits = str(round(gene_hits, 2)) + '%'
+    nogene_abund = numpy.median(list(raw_transcription_dict.values()))
 
-    # Perform RPM normalization if specified
-    if norm == True:
-        total_transcript = float(sum(transcription_dict.values()))
-        for gene in transcription_dict.keys():
-            new_abund = (transcription_dict[gene] / total_transcript) * 1000000.0
-            new_abund = round(new_abund, 3)
-            transcription_dict[gene] = new_abund
-
-    # Calculate transcript abundance based coefficients, handle divide-by-zero errors
-    direct = False
-    abund_distribution = list(set(transcription_dict.values()))
-    abund_distribution.sort()
-    max_transcript = float(max(abund_distribution)) + 1.0
-    if direct == True:
-        coefficients = [float(x+1.0) / max_transcript for x in abund_distribution]
-        coefficient_range = max(coefficients) + min(coefficients)
-        coefficients_rev = [(coefficient_range-x) for x in coefficients]
-    else:
-        coefficients = [float(x+1.0) / max_transcript for x in abund_distribution]
-        coefficients_rev = coefficients.copy()
-        coefficients_rev.reverse()
-
-    # If supplied by user, assign custom linear coefficients
-    if defined_coefficients != False:
-        defined_coefficients.sort()
-
-        # Check if same length, if not add on to one end
-        len_diff = len(defined_coefficients) - len(abund_distribution)
-        if len_diff > 0:
-            defined_coefficients = defined_coefficients[:len(defined_coefficients) - len_diff]
-        elif len_diff < 0:
-            defined_coefficients += [defined_coefficients[-1]] * abs(len_diff)
-
-        # Assign coefficient lists
-        coefficients = defined_coefficients
-        coefficients_rev = coefficients.copy()
-        coefficients_rev.reverse()
-
-    # Assign coefficients to abundances, adhere to minimum if provided by user
-    abund_min_coefficient_dict = {}
-    abund_max_coefficient_dict = {}
-    for index in range(0, len(abund_distribution)):
-        curr_min_coefficient = coefficients_rev[index]
-        if minimum != None: 
-            if coefficients_rev[index] < minimum: 
-                curr_min_coefficient = minimum
-        curr_max_coefficient = coefficients[index]
-        abund_min_coefficient_dict[abund_distribution[index]] = curr_min_coefficient
-        abund_max_coefficient_dict[abund_distribution[index]] = curr_max_coefficient
-
-    # Assign coefficients to reactions
-    rxn_min_coefficient_dict = {}
-    rxn_max_coefficient_dict = {}
-    for gene in transcription_dict.keys():
-        transcription = transcription_dict[gene]
-        min_coefficient = abund_min_coefficient_dict[transcription]
-        max_coefficient = abund_max_coefficient_dict[transcription]
-
-        # Assign corresponding coefficients to reactions associated with each gene
-        for rxn in list(model.genes.get_by_any(gene)[0].reactions):            
-            if rxn.id in rxn_min_coefficient_dict.keys():
-                rxn_min_coefficient_dict[rxn.id].append(min_coefficient)
-                rxn_max_coefficient_dict[rxn.id].append(max_coefficient)
-            else:
-                rxn_min_coefficient_dict[rxn.id] = [min_coefficient]
-                rxn_max_coefficient_dict[rxn.id] = [max_coefficient]
-    
-    # Select final coefficients
+    # Reduce transcription to single values per reaction based on max/sum or GPR rules
+    exchanges = {}
+    all_abundances = set([nogene_abund])
     for rxn in model.reactions:
+        # Identify extracellular exchanges
+        if set([x.compartment for x in rxn.reactants]) != set([x.compartment for x in rxn.products]):
+            for cpd in rxn.metabolites: # Transport reactions
+                for sub_rxn in cpd.reactions:
+                    if len(sub_rxn.reactants) == 0 or len(sub_rxn.products) == 0:
+                        exchanges[rxn.id] = sub_rxn.id
         try:
+            transcript_abund = rxn_transcript_dict[rxn.id]
             # Parse GPRs if defined by user
             if gpr == True:
                 curr_gpr = str(rxn.gene_reaction_rule).upper()
                 if ' AND ' in curr_gpr:
-                    rxn_min_coefficient_dict[rxn.id] = max(rxn_min_coefficient_dict[rxn.id])
-                    rxn_max_coefficient_dict[rxn.id] = min(rxn_max_coefficient_dict[rxn.id])
+                    current_abund = float(min(transcript_abund))
+                    rxn_transcript_dict[rxn.id] = current_abund
+                    all_abundances |= set([current_abund])
                 elif ' OR ' in curr_gpr:
-                    rxn_min_coefficient_dict[rxn.id] = min(rxn_min_coefficient_dict[rxn.id])
-                    rxn_max_coefficient_dict[rxn.id] = max(rxn_max_coefficient_dict[rxn.id])
+                    current_abund = float(sum(transcript_abund))
+                    rxn_transcript_dict[rxn.id] = current_abund
+                    all_abundances |= set([current_abund])
                 else:
-                    rxn_min_coefficient_dict[rxn.id] = numpy.median(rxn_min_coefficient_dict[rxn.id])
-                    rxn_max_coefficient_dict[rxn.id] = numpy.median(rxn_max_coefficient_dict[rxn.id])
+                    current_abund = float(max(transcript_abund))
+                    rxn_transcript_dict[rxn.id] = current_abund
+                    all_abundances |= set([current_abund])
             else:
-                rxn_min_coefficient_dict[rxn.id] = min(rxn_min_coefficient_dict[rxn.id])
-                rxn_max_coefficient_dict[rxn.id] = max(rxn_max_coefficient_dict[rxn.id])
+                if additive == True:
+                    current_abund = float(sum(transcript_abund))
+                    rxn_transcript_dict[rxn.id] = current_abund
+                    all_abundances |= set([current_abund])
+                else:
+                    current_abund = float(max(transcript_abund))
+                    rxn_transcript_dict[rxn.id] = current_abund
+                    all_abundances |= set([current_abund])
         # Coefficient if no gene is associated
         except KeyError:
-            rxn_min_coefficient_dict[rxn.id] = numpy.median(coefficients)
-            rxn_max_coefficient_dict[rxn.id] = numpy.median(coefficients)
-            continue
-    
+            rxn_transcript_dict[rxn.id] = nogene_abund
+
+    # Calculate coefficients
+    all_abundances = list(all_abundances)
+    all_abundances.sort()
+    max_coefficients = [x / max(all_abundances) for x in all_abundances]
+    min_coefficients = max_coefficients[::-1]
+    coefficient_dict = {}
+    for x in range(0, len(all_abundances)):
+        coefficient_dict[all_abundances[x]] = [min_coefficients[x], max_coefficients[x]]
+
+    # Assign coefficients to reactions
+    rxn_min_coefficient_dict = {}
+    rxn_max_coefficient_dict = {}
+    for rxn in rxn_transcript_dict.keys():
+        rxn_min_coefficient_dict[rxn] = coefficient_dict[rxn_transcript_dict[rxn]][0]
+        rxn_max_coefficient_dict[rxn] = coefficient_dict[rxn_transcript_dict[rxn]][1]
+
+    # Set adjacent exchange reactions to the same coefficients
+    if exch_weight == True:
+        for rxn in exchanges.keys():
+            rxn_max_coefficient_dict[exchanges[rxn]] = rxn_max_coefficient_dict[rxn]
+            rxn_min_coefficient_dict[exchanges[rxn]] = rxn_min_coefficient_dict[rxn]
+
     return rxn_min_coefficient_dict, rxn_max_coefficient_dict, gene_hits
 
 
