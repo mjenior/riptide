@@ -145,8 +145,8 @@ def _assign_quantiles(transcription, quant_max, quant_min, step):
 
 
 # Create context-specific model based on transcript distribution
-def contextualize(model, transcriptome, samples = 500, silent = False, exch_weight = False,
-    fraction = 0.8, minimum = None, conservative = False, objective = True, additive = False,
+def contextualize(model, transcriptome, samples = 500, silent = False, exch_weight = True,
+    fraction = 0.8, minimum = None, conservative = False, objective = True, additive = True,
     set_bounds = True, tasks = [], exclude = [], gpr = False, threshold = 1e-6, defined=False):
 
     '''Reaction Inclusion by Parsimony and Transcriptomic Distribution or RIPTiDe
@@ -171,7 +171,7 @@ def contextualize(model, transcriptome, samples = 500, silent = False, exch_weig
         Default is False
     exch_weight : bool
         Weight exchange reactions the same ase adjacent transporters
-        Default is False
+        Default is True
     fraction : float
         Minimum percent of optimal objective value during FBA steps
         Default is 0.8
@@ -186,7 +186,7 @@ def contextualize(model, transcriptome, samples = 500, silent = False, exch_weig
         Default is True
     additive : bool
         Pool transcription abundances for reactions with multiple contributing gene products
-        Default is False
+        Default is True
     set_bounds : bool
         Uses flax variability analysis results from constrained model to set new bounds for all reactions
         Default is True
