@@ -81,11 +81,11 @@ silent  : bool
     Silences std out 
     Default is False
 exch_weight : bool
-    Weight exchange reactions the same ase adjacent transporters
-    Default is True
+    Weight exchange reactions the same as adjacent transporters
+    Default is False
 additive : bool
     Pool transcription abundances for reactions with multiple contributing gene products
-    Default is True
+    Default is False
 fraction : float
     Minimum percent of optimal objective value during FBA steps
     Default is 0.8

@@ -145,8 +145,8 @@ def _assign_quantiles(transcription, quant_max, quant_min, step):
 
 
 # Create context-specific model based on transcript distribution
-def contextualize(model, transcriptome, samples = 500, silent = False, exch_weight = True,
-    fraction = 0.8, minimum = None, conservative = False, objective = True, additive = True,
+def contextualize(model, transcriptome, samples = 500, silent = False, exch_weight = False,
+    fraction = 0.8, minimum = None, conservative = False, objective = True, additive = False,
     set_bounds = True, tasks = [], exclude = [], gpr = False, threshold = 1e-6, defined=False):
 
     '''Reaction Inclusion by Parsimony and Transcriptomic Distribution or RIPTiDe
@@ -170,7 +170,7 @@ def contextualize(model, transcriptome, samples = 500, silent = False, exch_weig
         Silences std out 
         Default is False
     exch_weight : bool
-        Weight exchange reactions the same ase adjacent transporters
+        Weight exchange reactions the same as adjacent transporters
         Default is True
     fraction : float
         Minimum percent of optimal objective value during FBA steps
@@ -186,7 +186,7 @@ def contextualize(model, transcriptome, samples = 500, silent = False, exch_weig
         Default is True
     additive : bool
         Pool transcription abundances for reactions with multiple contributing gene products
-        Default is True
+        Default is False
     set_bounds : bool
         Uses flax variability analysis results from constrained model to set new bounds for all reactions
         Default is True
@@ -299,7 +299,7 @@ def _assign_coefficients(raw_transcription_dict, model, minimum, gpr, defined_co
     if total == fail: raise LookupError('ERROR: No gene IDs in transcriptome dictionary found in model.')
     gene_hits = (float(total - fail) / total) * 100.0
     gene_hits = str(round(gene_hits, 2)) + '%'
-    nogene_abund = numpy.median(list(raw_transcription_dict.values()))
+    nogene_abund = numpy.median(list(set(raw_transcription_dict.values())))
 
     # Reduce transcription to single values per reaction based on max/sum or GPR rules
     exchanges = {}
