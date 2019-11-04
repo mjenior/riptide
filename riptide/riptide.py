@@ -160,8 +160,9 @@ def contextualize(model, transcriptome, samples = 500, silent = False, exch_weig
     model : cobra.Model
         The model to be contextualized
         REQUIRED
-    transcriptome : dictionary
+    transcriptome : dictionary of 'pfba'
         Dictionary of transcript abundances, output of read_transcription_file()
+        If 'pfba' is provided, an artifical transcriptome is generated where all abundances equal 1.0
         REQUIRED
     samples : int 
         Number of flux samples to collect
@@ -230,6 +231,12 @@ def contextualize(model, transcriptome, samples = 500, silent = False, exch_weig
     if defined != False:
         if isinstance(defined, list) == False:
             defined = [defined]
+
+    # Creates artificial transcriptome to identify most parsimonious patterns of metabolism
+    if transcriptome == 'pfba':
+        transcriptome = {}
+        for gene in model.genes:
+            transcriptome[gene.id] = 1.0
 
     # Save parameters as part of the output object
     riptide_object.fraction_of_optimum = fraction

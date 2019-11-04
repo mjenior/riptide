@@ -74,6 +74,7 @@ model : cobra.Model
     The model to be contextualized (REQUIRED)
 transcriptome : dictionary
     Dictionary of transcript abundances, output of read_transcription_file (REQUIRED)
+    If 'pfba' is provided, an artifical transcriptome is generated where all abundances equal 1.0
 samples : int
     Number of flux samples to collect
     Default is 500
