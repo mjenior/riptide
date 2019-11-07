@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: riptide
-Version: 2.5.9
+Version: 2.6.0
 Summary: Reaction Inclusion by Parsimony and Transcript Distribution (RIPTiDe)
 Home-page: https://github.com/mjenior/riptide
 Author: Matthew Jenior
@@ -82,7 +82,7 @@ Description: # RIPTiDe
             The model to be contextualized (REQUIRED)
         transcriptome : dictionary
             Dictionary of transcript abundances, output of read_transcription_file (REQUIRED)
-            If 'pfba' is provided, an artifical transcriptome is generated where all abundances equal 1.0
+            With default of 'none', an artifical transcriptome is generated where all abundances equal 1.0
         samples : int
             Number of flux samples to collect
             Default is 500

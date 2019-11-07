@@ -145,7 +145,7 @@ def _assign_quantiles(transcription, quant_max, quant_min, step):
 
 
 # Create context-specific model based on transcript distribution
-def contextualize(model, transcriptome, samples = 500, silent = False, exch_weight = False,
+def contextualize(model, transcriptome = 'none', samples = 500, silent = False, exch_weight = False,
     fraction = 0.8, minimum = None, conservative = False, objective = True, additive = False,
     set_bounds = True, tasks = [], exclude = [], gpr = False, threshold = 1e-6, defined=False):
 
@@ -162,8 +162,7 @@ def contextualize(model, transcriptome, samples = 500, silent = False, exch_weig
         REQUIRED
     transcriptome : dictionary of 'pfba'
         Dictionary of transcript abundances, output of read_transcription_file()
-        If 'pfba' is provided, an artifical transcriptome is generated where all abundances equal 1.0
-        REQUIRED
+        With default of 'none', an artifical transcriptome is generated where all abundances equal 1.0
     samples : int 
         Number of flux samples to collect
         Default is 500
@@ -233,7 +232,7 @@ def contextualize(model, transcriptome, samples = 500, silent = False, exch_weig
             defined = [defined]
 
     # Creates artificial transcriptome to identify most parsimonious patterns of metabolism
-    if transcriptome == 'pfba':
+    if transcriptome == 'none':
         transcriptome = {}
         for gene in model.genes:
             transcriptome[gene.id] = 1.0
