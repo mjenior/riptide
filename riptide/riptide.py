@@ -478,7 +478,7 @@ def _calc_concordance(flux_samples, coefficient_dict):
             continue
         
     r_val, p_val = spearmanr(coefficients, flux_medians)
-    concordance_dict = {'rho':r_val, 'p':p_val}
+    concordance_dict = {'r':r_val, 'p':p_val}
     
     warnings.filterwarnings('default')
     return concordance_dict
@@ -584,7 +584,7 @@ def _operation_report(start_time, model, riptide, concordance):
             print('Flux through the objective INCREASED to ~' + str(new_ov) + ' from ' + str(old_ov) + ' (' + str(perc_shift) + '% change)')
     
     # Report concordance
-    if concordance['rho'] > 0.0 and concordance['p'] <= 0.05:
+    if concordance['r'] > 0.0 and concordance['p'] <= 0.05:
         p_val = round(concordance['p'], 3)
         if p_val == 0.0:
             p_val = 'p<<0.001 ***'
@@ -594,7 +594,8 @@ def _operation_report(start_time, model, riptide, concordance):
             p_val = 'p=' + str(p_val) + ' **'
         elif p_val <= 0.05:
             p_val = 'p=' + str(p_val) + ' *'
-        print('Context-specific metabolism correlates with transcriptome (' + p_val + ')')
+        rho = 'r=' + str(round(concordance['r'], 3))
+        print('Context-specific metabolism correlates with transcriptome (' rho + ', ' + p_val + ')')
 
     # Run time
     seconds = round(time.time() - start_time)
