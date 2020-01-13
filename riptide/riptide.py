@@ -1,5 +1,6 @@
 #!/usr/bin/python
 
+import os
 import copy
 import time
 import numpy
@@ -30,17 +31,128 @@ class riptideClass:
         self.gpr_integration = 'NULL'
         self.percent_of_mapping = 'NULL'
         self.defined_coefficients = 'NULL'
+        self.included_important = 'NULL'
+        self.additional_parameters = 'NULL'
 
+
+# Save the output of RIPTiDe in a newly created directory
+def save_riptide_output(riptide_obj='NULL', path='NULL', file_type='SBML'):
+    '''Writes RIPTiDe results to files in a new directory
+    
+    Parameters
+    ----------
+
+    REQUIRED
+    riptide_obj : RIPTiDe object
+        Class object creared by riptide.contextualize()
+
+    OPTIONAL
+    path : str
+        New directory to write output files
+    file_type : str
+        Type of output file for RIPTiDe model
+        Accepts either sbml or json
+        Default is SBML
+    '''
+
+    if riptide_obj == 'NULL':
+    	raise ValueError('ERROR: Did not provide a RIPTiDe object')
+    
+    if path == 'NULL':
+        print('WARNING: Did not provide an output directory. Using default riptide_files in working directory')
+        path = 'riptide_files'
+    try:
+        os.mkdir(path)
+    except:
+        print('WARNING: Output path already exists, overwriting previous files')
+
+    # Write model to file
+    if file_type.upper() == 'JSON':
+        outFile = path + '/model.json'
+        cobra.io.save_json_model(riptide_obj.model, outFile)
+    else:
+        outFile = path + '/model.sbml'
+        cobra.io.write_sbml_model(riptide_obj.model, outFile)
+
+    # Write flux samples and FVA to a tsv
+    if isinstance(riptide_obj.flux_samples, str) == False:
+        outFile = path + '/flux_samples.tsv'
+        riptide_obj.flux_samples.to_csv(outFile, sep='\t')
+    outFile = path + '/flux_variability.tsv'
+    riptide_obj.flux_variability.to_csv(outFile, sep='\t')
+
+    # Write coefficient dictionaries to tsvs
+    outFile = path + '/flux_minimization_coefficients.tsv'
+    with open(outFile, 'w') as min_coefficients:
+        min_coefficients.write('reaction\tlinear_coefficient\n')
+        for rxn in riptide_obj.minimization_coefficients.keys():
+            min_coefficients.write(rxn + '\t' + str(riptide_obj.minimization_coefficients[rxn]) + '\n')
+    outFile = path + '/flux_maximization_coefficients.tsv'
+    with open(outFile, 'w') as max_coefficients:
+        max_coefficients.write('reaction\tlinear_coefficient\n')
+        for rxn in riptide_obj.maximization_coefficients.keys():
+            max_coefficients.write(rxn + '\t' + str(riptide_obj.maximization_coefficients[rxn]) + '\n')
+
+    # Assemble parameters and output metrics text file
+    outFile = path + '/parameters.txt'
+    with open(outFile, 'w') as parameters:
+        # Parameters
+        parameters.write('Fraction of optimum objective value: ' + str(riptide_obj.fraction_of_optimum) + '\n')
+        parameters.write('Percent of genes in mapping found in model: ' + str(riptide_obj.percent_of_mapping) + '\n')
+        parameters.write('Minimum flux to avoid pruning: ' + str(riptide_obj.additional_parameters['threshold']) + '\n')
+        if riptide_obj.gpr_integration == True:
+            parameters.write('Differential weighting by GPR: Yes\n')
+        else:
+            parameters.write('Differential weighting by GPR: No\n')
+        if riptide_obj.additional_parameters['exch_weight'] == True:
+            parameters.write('Exchanges weighted as adjacent transporters: Yes\n')
+        else:
+            parameters.write('Exchanges weighted as adjacent transporters: No\n')
+        if riptide_obj.additional_parameters['set_bounds'] == True:
+            parameters.write('Set reaction bounds based on FVA results: Yes\n')
+        else:
+            parameters.write('Set reaction bounds based on FVA results: No\n')
+        if riptide_obj.additional_parameters['objective'] == True:
+            parameters.write('Defined cellular objective: Yes\n')
+        else:
+            parameters.write('Defined cellular objective: No\n')
+        if riptide_obj.additional_parameters['conservative'] == True:
+            parameters.write('Conservative pruning based on GPR: Yes\n')
+        else:
+            parameters.write('Conservative pruning based on GPR: No\n')
+        if riptide_obj.additional_parameters['additive'] == True:
+            parameters.write('Pooled transcript based on GPR: Yes\n')
+        else:
+            parameters.write('Pooled transcript based on GPR: No\n')
+        if riptide_obj.additional_parameters['silent'] == True:
+            parameters.write('Run in silent mode: Yes\n')
+        else:
+            parameters.write('Run in silent mode: No\n\n')
+
+        # Results
+        parameters.write('Percent pruned reactions: ' + str(riptide_obj.additional_parameters['operation']['reactions']) + '%\n')
+        parameters.write('Percent pruned metabolites: ' + str(riptide_obj.additional_parameters['operation']['metabolites']) + '%\n')
+        if riptide_obj.additional_parameters['operation']['obj_change'] != 'fails':
+            parameters.write('Percent change to objective value: ' + str(riptide_obj.additional_parameters['operation']['obj_change']) + '%\n')
+        if riptide_obj.concordance != 'Not performed':
+            if str(riptide_obj.concordance['r']) != 'nan':
+                parameters.write('Correlation between activity and transcriptome: R=' + str(riptide_obj.concordance['r']) + ', p-value=' + str(riptide_obj.concordance['p']) + '\n')
+        parameters.write('RIPTiDe run time: ' + str(riptide_obj.additional_parameters['operation']['run_time']) + ' seconds\n')
+        
 
 # Read in transcriptomic read abundances, default is tsv with no header 
 def read_transcription_file(file, header = False, replicates = False, sep = '\t', 
     binning = False, quant_max = 0.9, quant_min = 0.5, step = 0.125, norm = True, factor = 1e6):
-    '''Generates dictionary of transcriptomic abundances from a file.
+    '''Generates dictionary of transcriptomic abundances from a file
     
     Parameters
     ----------
+
+    REQUIRED
     file : string
         User-provided file name which contains gene IDs and associated transcription values
+
+    OPTIONAL
     header : boolean
         Defines if read abundance file has a header that needs to be ignored
         Default is no header
@@ -146,23 +258,26 @@ def _assign_quantiles(transcription, quant_max, quant_min, step):
 
 # Create context-specific model based on transcript distribution
 def contextualize(model, transcriptome = 'none', samples = 500, silent = False, exch_weight = False,
-    fraction = 0.8, minimum = None, conservative = False, objective = True, additive = False,
-    set_bounds = True, tasks = [], exclude = [], gpr = False, threshold = 1e-6, defined=False):
+    fraction = 0.8, minimum = None, conservative = False, objective = True, additive = False, important = [],
+    set_bounds = True, tasks = [], exclude = [], gpr = False, threshold = 1e-6, defined = False):
 
     '''Reaction Inclusion by Parsimony and Transcriptomic Distribution or RIPTiDe
     
     Creates a contextualized metabolic model based on parsimonious usage of reactions defined
     by their associated transcriptomic abundances. Returns a pruned, context-specific cobra.Model 
-    and a pandas.DataFrame of associated flux analysis along with parameters used in a riptide class object
+    and associated flux analyses along with parameters used in a riptide class object
 
     Parameters
     ----------
+
+    REQUIRED
     model : cobra.Model
         The model to be contextualized
-        REQUIRED
-    transcriptome : dictionary of 'pfba'
+
+    OPTIONAL
+    transcriptome : dictionary
         Dictionary of transcript abundances, output of read_transcription_file()
-        With default of 'none', an artifical transcriptome is generated where all abundances equal 1.0
+        With default, an artifical transcriptome is generated where all abundances equal 1.0
     samples : int 
         Number of flux samples to collect
         Default is 500
@@ -187,11 +302,14 @@ def contextualize(model, transcriptome = 'none', samples = 500, silent = False, 
     additive : bool
         Pool transcription abundances for reactions with multiple contributing gene products
         Default is False
+    important : list
+        List of gene or reaction ID strings for which the highest weights are assigned regardless of transcription
+        Default is False
     set_bounds : bool
         Uses flax variability analysis results from constrained model to set new bounds for all reactions
         Default is True
     tasks : list
-        List of gene or reaction ID strings for forced inclusion in final model (metabolic tasks)
+        List of gene or reaction ID strings for forced inclusion in final model (metabolic tasks or essential genes)
     exclude : list
         List of reaction ID strings for forced exclusion from final model
     gpr : bool
@@ -203,15 +321,25 @@ def contextualize(model, transcriptome = 'none', samples = 500, silent = False, 
     defined : False or list
         User defined range of linear coeffients, needs to be defined in a list like [1, 0.5, 0.1, 0.01, 0.001]
         Works best paired with binned abundance catagories from riptide.read_transcription_file()
-        OPTIONAL, default is False
+        Default is False
     '''
 
     start_time = time.time()
     riptide_object = riptideClass()
-    
+    riptide_object.additional_parameters = {}
+    riptide_object.additional_parameters['threshold'] = threshold
+    riptide_object.additional_parameters['silent'] = silent
+    riptide_object.additional_parameters['exch_weight'] = exch_weight
+    riptide_object.additional_parameters['conservative'] = conservative
+    riptide_object.additional_parameters['objective'] = objective
+    riptide_object.additional_parameters['additive'] = additive
+    riptide_object.additional_parameters['set_bounds'] = set_bounds
+
     # Correct some possible user error
     samples = int(samples)
-    if samples <= 0: samples = 1
+    if samples < 1: samples = 500
+    if len(important) > 0: samples = 1
+    riptide_object.additional_parameters['samples'] = samples
     fraction = float(fraction)
     if fraction <= 0.0: 
         fraction = 0.01
@@ -222,6 +350,7 @@ def contextualize(model, transcriptome = 'none', samples = 500, silent = False, 
             minimum = 0.0001
         elif minimum > 1.0: 
             minimum = 0.0001
+    riptide_object.additional_parameters['minimum'] = minimum
     solution = model.slim_optimize()
     if model.slim_optimize() < 1e-6 or str(model.slim_optimize()) == 'nan':
         raise ValueError('ERROR: Provided model objective cannot carry flux! Please correct')
@@ -255,11 +384,11 @@ def contextualize(model, transcriptome = 'none', samples = 500, silent = False, 
     blocked_rxns = blocked_rxns.difference(set(tasks))
     blocked_rxns = list(blocked_rxns.union(set(exclude)))
     riptide_model = _prune_model(riptide_model, blocked_rxns, conservative)
-    min_coefficient_dict, max_coefficient_dict, gene_hits = _assign_coefficients(transcriptome, riptide_model, minimum, gpr, defined, additive, exch_weight)
+    min_coefficient_dict, max_coefficient_dict, gene_hits, important_type = _assign_coefficients(transcriptome, riptide_model, minimum, gpr, defined, additive, exch_weight, important)
     riptide_object.minimization_coefficients = min_coefficient_dict
     riptide_object.maximization_coefficients = max_coefficient_dict
     riptide_object.percent_of_mapping = gene_hits
-
+    
     # Prune now inactive network sections based on coefficients
     if silent == False: print('Pruning zero flux subnetworks...')
     rm_rxns = _constrain_and_analyze_model(riptide_model, min_coefficient_dict, fraction, 0, objective, tasks, minimum_threshold)
@@ -276,13 +405,30 @@ def contextualize(model, transcriptome = 'none', samples = 500, silent = False, 
     if set_bounds == True: riptide_model = _set_new_bounds(riptide_model, fva_result)
     riptide_object.model = riptide_model
 
+    # Report on included subset of user-defined important genes
+    if len(important) > 0:
+        if important_type == 'genes':
+            curr_list = set([x.id for x in riptide_model.genes])
+        elif important_type == 'reactions':
+            curr_list = set([y.id for y in riptide_model.reactions])
+        included_important = set(important).intersection(curr_list)
+        riptide_object.included_important = included_important
+    else:
+        riptide_object.included_important = important
+
     # Analyze changes introduced by RIPTiDe and return results
-    if silent == False: _operation_report(start_time, model, riptide_model, concordance)
+    if silent == False: 
+        report_dict = _operation_report(start_time, model, riptide_model, concordance)
+        riptide_object.additional_parameters['operation'] = report_dict
+    else:
+        if model.slim_optimize() < 1e-6 or str(model.slim_optimize()) == 'nan':
+            print('WARNING: Contextualized model objective can no longer carry flux')
+            
     return riptide_object
 
 
 # Converts a dictionary of transcript abundances to reaction linear coefficients
-def _assign_coefficients(raw_transcription_dict, model, minimum, gpr, defined_coefficients, additive, exch_weight):
+def _assign_coefficients(raw_transcription_dict, model, minimum, gpr, defined_coefficients, additive, exch_weight, important):
     
     # Screen transcriptomic abundances for genes that are included in model
     rxn_transcript_dict = {}
@@ -369,7 +515,12 @@ def _assign_coefficients(raw_transcription_dict, model, minimum, gpr, defined_co
             rxn_max_coefficient_dict[exchanges[rxn]] = rxn_max_coefficient_dict[rxn]
             rxn_min_coefficient_dict[exchanges[rxn]] = rxn_min_coefficient_dict[rxn]
 
-    return rxn_min_coefficient_dict, rxn_max_coefficient_dict, gene_hits
+    # If user has defined important genes/reactions, integrate new weights here
+    important_type = 'NULL'
+    if len(important) > 0: 
+        rxn_min_coefficient_dict, important_type = _integrate_important(model, important, rxn_min_coefficient_dict)
+
+    return rxn_min_coefficient_dict, rxn_max_coefficient_dict, gene_hits, important_type
 
 
 # Assemble a corrected list of metabolic tasks based on user
@@ -413,6 +564,36 @@ def _integrate_tasks(model, tasks):
     return model
 
 
+# Assign heaviest weight during pruning to user-defined important genes
+def _integrate_important(model, important, coefficient_dict):
+
+    #weight = numpy.quantile(list(coefficient_dict.values()), 0.25)
+    weight = min(list(coefficient_dict.values()))
+
+    # Check if reactions or genes, get reaction IDs
+    rxn_ids = set()
+    for x in important:
+        # Genes
+        try:
+            rxns = list(model.genes.get_by_id(x).reactions)
+            rxn_ids |= set([y.id for y in rxns])
+            important_type = 'genes'
+        except:
+            pass
+        # Reactions
+        try:
+            rxn = model.reactions.get_by_id(x)
+            rxn_ids |= set([x])
+            important_type = 'reactions'
+        except:
+            continue
+
+    # Correct weight in coefficient dictionary
+    for rxn in rxn_ids: coefficient_dict[rxn] = weight
+
+    return coefficient_dict, important_type
+
+
 # Determine those reactions that carry flux in a pFBA objective set to a threshold of maximum
 def _constrain_and_analyze_model(model, coefficient_dict, fraction, sampling_depth, objective, tasks, minimum_threshold=1e-6):
     
@@ -428,8 +609,11 @@ def _constrain_and_analyze_model(model, coefficient_dict, fraction, sampling_dep
     # Apply weigths to new expression
     pfba_expr = symengine.RealDouble(0)
     for rxn in constrained_model.reactions:
-        pfba_expr += coefficient_dict[rxn.id] * rxn.forward_variable
-        pfba_expr += coefficient_dict[rxn.id] * rxn.reverse_variable
+        try:
+            pfba_expr += coefficient_dict[rxn.id] * rxn.forward_variable
+            pfba_expr += coefficient_dict[rxn.id] * rxn.reverse_variable
+        except KeyError:
+            continue
 
     if sampling_depth == 0:
         # Include metabolic task constraints
@@ -453,12 +637,14 @@ def _constrain_and_analyze_model(model, coefficient_dict, fraction, sampling_dep
         constrained_model.add_cons_vars([flux_sum_constraint])
         constrained_model.solver.update()
             
-        # Analyze flux ranges
-        flux_samples = _gapsplit(constrained_model, n=sampling_depth)
+        # Analyze flux ranges and calculate concordance
+        if sampling_depth != 1:
+        	flux_samples = _gapsplit(constrained_model, n=sampling_depth)
+        	concordance = _calc_concordance(flux_samples, coefficient_dict)
+        else:
+        	flux_samples = 'Not performed'
+        	concordance = 'Not performed'
         fva = flux_variability_analysis(constrained_model, fraction_of_optimum=fraction)
-
-        # Calculate concordance
-        concordance = _calc_concordance(flux_samples, coefficient_dict)
 
         return flux_samples, fva, concordance
 
@@ -551,15 +737,18 @@ def _set_new_bounds(model, fva):
 
 # Reports how long RIPTiDe took to run
 def _operation_report(start_time, model, riptide, concordance):
-    
+    report_dict = {}
+
     # Pruning
     perc_removal = 100.0 - ((float(len(riptide.reactions)) / float(len(model.reactions))) * 100.0)
     perc_removal = round(perc_removal, 2)
     print('\nReactions pruned to ' + str(len(riptide.reactions)) + ' from ' + str(len(model.reactions)) + ' (' + str(perc_removal) + '% change)')
+    report_dict['reactions'] = perc_removal
     perc_removal = 100.0 - ((float(len(riptide.metabolites)) / float(len(model.metabolites))) * 100.0)
     perc_removal = round(perc_removal, 2)
     print('Metabolites pruned to ' + str(len(riptide.metabolites)) + ' from ' + str(len(model.metabolites)) + ' (' + str(perc_removal) + '% change)')
-    
+    report_dict['metabolites'] = perc_removal
+
     # Flux through objective
     model_check = 'works'
     # Check that prune model can still achieve flux through the objective (just in case)
@@ -574,6 +763,7 @@ def _operation_report(start_time, model, riptide, concordance):
         new_ov = round(riptide.slim_optimize(), 2)
         old_ov = round(model.slim_optimize(), 2)
         perc_shift = 100.0 - ((float(new_ov) / float(old_ov)) * 100.0)
+        report_dict['obj_change'] = round(perc_shift, 2)
         if perc_shift == 0.0:
             pass
         elif perc_shift > 0.0:
@@ -582,33 +772,38 @@ def _operation_report(start_time, model, riptide, concordance):
         elif perc_shift < 0.0:
             perc_shift = round(abs(perc_shift), 2)
             print('Flux through the objective INCREASED to ~' + str(new_ov) + ' from ' + str(old_ov) + ' (' + str(perc_shift) + '% change)')
-    
+    else:
+    	report_dict['obj_change'] = 'fails'
+
     # Report concordance
-    if concordance['r'] > 0.0 and concordance['p'] <= 0.05:
-        p_val = round(concordance['p'], 3)
-        if p_val == 0.0:
-            p_val = 'p<<0.001 ***'
-        elif p_val <= 0.001:
-            p_val = 'p=' + str(p_val) + ' ***'
-        elif p_val <= 0.01:
-            p_val = 'p=' + str(p_val) + ' **'
-        elif p_val <= 0.05:
-            p_val = 'p=' + str(p_val) + ' *'
-        rho = 'r=' + str(round(concordance['r'], 3))
-        print('Context-specific metabolism correlates with transcriptome (' rho + ', ' + p_val + ')')
+    if concordance != 'Not performed':
+    	if concordance['r'] > 0.0 and concordance['p'] <= 0.05:
+    		p_val = round(concordance['p'], 3)
+    		if p_val == 0.0:
+    			p_val = 'p<<0.001 ***'
+    		elif p_val <= 0.001:
+    			p_val = 'p=' + str(p_val) + ' ***'
+    		elif p_val <= 0.01:
+    			p_val = 'p=' + str(p_val) + ' **'
+    		elif p_val <= 0.05:
+    			p_val = 'p=' + str(p_val) + ' *'
+    		rho = 'r=' + str(round(concordance['r'], 3))
+    		print('Context-specific metabolism correlates with transcriptome (' + rho + ', ' + p_val + ')')
 
     # Run time
-    seconds = round(time.time() - start_time)
-    if seconds < 60:
-        print('\nRIPTiDe completed in ' + str(int(seconds)) + ' seconds\n')
-    elif seconds < 3600:
-        minutes, seconds = divmod(seconds, 60)
+    raw_seconds = round(time.time() - start_time)
+    report_dict['run_time'] = raw_seconds
+    if raw_seconds < 60:
+        print('\nRIPTiDe completed in ' + str(int(raw_seconds)) + ' seconds\n')
+    elif raw_seconds < 3600:
+        minutes, seconds = divmod(raw_seconds, 60)
         print('\nRIPTiDe completed in ' + str(int(minutes)) + ' minutes and ' + str(int(seconds)) + ' seconds\n')
     else:
-        minutes, seconds = divmod(seconds, 60)
+        minutes, seconds = divmod(raw_seconds, 60)
         hours, minutes = divmod(minutes, 60)
         print('\nRIPTiDe completed in ' + str(int(hours)) + ' hours, ' + str(int(minutes)) + ' minutes, and ' + str(int(seconds)) + ' seconds\n')
 
+    return report_dict
 
 #-----------------------------------------------------------------#
 
