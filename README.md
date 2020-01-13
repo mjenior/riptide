@@ -8,12 +8,12 @@ Transcriptomic analyses of bacteria have become instrumental to our understandin
 
 Please cite when using:
 ```
-Jenior ML, Moutinho TJ, and Papin JA. (2019). Transcriptome-guided parsimonious flux analysis improves predictions with metabolic networks in complex environments. bioRxiv 637124; doi: https://doi.org/10.1101/637124
+Jenior ML, Moutinho Jr TJ, Dougherty BV, & Papin JA. (2020). Transcriptome-guided parsimonious flux analysis improves predictions with metabolic networks in complex environments. PLOS Comp Biol....
 ```
 
 Utilizes python implementation of the gapsplit flux sampler. Please also cite:
 ```
-Keaty TC and Jensen PA (2019). gapsplit: Efficient random sampling for non-convex constraint-based models. bioRxiv 652917; doi: https://doi.org/10.1101/652917
+Keaty TC & Jensen PA (2020). Gapsplit: Efficient random sampling for non-convex constraint-based models. Bioinformatics. btz971. https://doi.org/10.1093/bioinformatics/btz971.
 ```
 
 ## Dependencies
@@ -34,10 +34,13 @@ $ pip install riptide
 
 ### Arguments for core RIPTiDe functions:
 
-**riptide.read_transcription_file()**
+**riptide.read_transcription_file() - Generates dictionary of transcriptomic abundances from a file**
 ```
+REQUIRED
 file : string
     User-provided file name which contains gene IDs and associated transcription values
+
+OPTIONAL
 header : boolean
     Defines if read abundance file has a header that needs to be ignored
     Default is no header
@@ -68,14 +71,17 @@ factor : numeric
     Default is 1e6 (RPM)
 ```
 
-**riptide.contextualize()**
+**riptide.contextualize() - Create context-specific model based on transcript distribution**
 ```
+REQUIRED
 model : cobra.Model
-    The model to be contextualized (REQUIRED)
+    The model to be contextualized
+
+OPTIONAL
 transcriptome : dictionary
-    Dictionary of transcript abundances, output of read_transcription_file
-    With default of 'none', an artifical transcriptome is generated where all abundances equal 1.0
-samples : int
+    Dictionary of transcript abundances, output of read_transcription_file()
+    With default, an artifical transcriptome is generated where all abundances equal 1.0
+samples : int 
     Number of flux samples to collect
     Default is 500
 silent  : bool
@@ -83,10 +89,7 @@ silent  : bool
     Default is False
 exch_weight : bool
     Weight exchange reactions the same as adjacent transporters
-    Default is False
-additive : bool
-    Pool transcription abundances for reactions with multiple contributing gene products
-    Default is False
+    Default is True
 fraction : float
     Minimum percent of optimal objective value during FBA steps
     Default is 0.8
@@ -96,17 +99,20 @@ minimum : float
 conservative : bool
     Conservatively remove inactive reactions based on genes
     Default is False
-bound : bool
-    Bounds each reaction based on transcriptomic constraints
-    Default is False
 objective : bool
     Sets previous objective function as a constraint with minimum flux equal to user input fraction
     Default is True
+additive : bool
+    Pool transcription abundances for reactions with multiple contributing gene products
+    Default is False
+essential : list
+    List of gene or reaction ID strings for which the highest weights are assigned regardless of transcription
+    Default is False
 set_bounds : bool
     Uses flax variability analysis results from constrained model to set new bounds for all reactions
     Default is True
 tasks : list
-    List of reaction ID strings for metabolic tasks to be included in final model 
+    List of gene or reaction ID strings for forced inclusion in final model (metabolic tasks or essential genes)
 exclude : list
     List of reaction ID strings for forced exclusion from final model
 gpr : bool
@@ -118,8 +124,24 @@ threshold : float
 defined : False or list
     User defined range of linear coeffients, needs to be defined in a list like [1, 0.5, 0.1, 0.01, 0.001]
     Works best paired with binned abundance catagories from riptide.read_transcription_file()
-    OPTIONAL, default is False
+    Default is False
 ```
+
+**riptide.save_riptide_output() - Writes RIPTiDe results to files in a new directory**
+```
+REQUIRED
+riptide_obj : RIPTiDe object
+    Class object creared by riptide.contextualize()
+
+OPTIONAL
+path : str
+    New directory to write output files
+file_type : str
+    Type of output file for RIPTiDe model
+    Accepts either sbml or json
+    Default is SBML
+```
+
 
 ## Usage
 
@@ -134,6 +156,8 @@ transcript_abundances_2 = riptide.read_transcription_file('examples/transcriptom
 riptide_object_1_a = riptide.contextualize(model=my_model, transcriptome=transcript_abundances_1)
 riptide_object_1_b = riptide.contextualize(model=my_model, transcriptome=transcript_abundances_1, tasks=['rxn1'], exclude=['rxn2','rxn3'])
 riptide_object_2 = riptide.contextualize(model=my_model, transcriptome=transcript_abundances_2)
+
+riptide.save_riptide_output(riptide_obj=riptide_object_1_a, path='~/Desktop/riptide_output')
 ``` 
 
 ### Example stdout report:
@@ -166,7 +190,8 @@ RIPTiDe completed in 29 seconds
 - **concordance** - Spearman correlation results between linear coefficients and median fluxes from sampling
 - **gpr_integration** - Whether GPR rules were considered during assignment of linear coefficients
 - **defined_coefficients** - Range of linear coefficients RIPTiDe is allowed to utilize provided as a list
-
+- **included_important** - Reactions or Genes included in the final model which the user defined as important
+- **additional_parameters** - Dictionary of additional parameters RIPTiDe uses
 
 ## Additional Information
 
