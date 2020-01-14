@@ -13,7 +13,7 @@ import itertools
 from cobra.util import solver
 from scipy.stats import spearmanr
 from cobra.manipulation.delete import remove_genes
-from cobra.flux_analysis import flux_variability_analysis, find_blocked_reactions
+from cobra.flux_analysis import flux_variability_analysis
 
 
 # Create a class to house riptide output data
@@ -136,7 +136,9 @@ def save_riptide_output(riptide_obj='NULL', path='NULL', file_type='SBML'):
             parameters.write('Percent change to objective value: ' + str(riptide_obj.additional_parameters['operation']['obj_change']) + '%\n')
         if riptide_obj.concordance != 'Not performed':
             if str(riptide_obj.concordance['r']) != 'nan':
-                parameters.write('Correlation between activity and transcriptome: R=' + str(riptide_obj.concordance['r']) + ', p-value=' + str(riptide_obj.concordance['p']) + '\n')
+                r_val = round(riptide_obj.concordance['r'], 4)
+                p_val = round(riptide_obj.concordance['p'], 4)
+                parameters.write('Correlation between activity and transcriptome: R=' + str(r_val) + ', p-value=' + str(p_val) + '\n')
         parameters.write('RIPTiDe run time: ' + str(riptide_obj.additional_parameters['operation']['run_time']) + ' seconds\n')
         
 
@@ -362,9 +364,11 @@ def contextualize(model, transcriptome = 'none', samples = 500, silent = False, 
 
     # Creates artificial transcriptome to identify most parsimonious patterns of metabolism
     if transcriptome == 'none':
-        transcriptome = {}
-        for gene in model.genes:
-            transcriptome[gene.id] = 1.0
+    	if silent == False:
+    		print('WARNING: No transcriptome provided. Analyzing most parsimonious state')
+    	transcriptome = {}
+    	for gene in model.genes:
+    		transcriptome[gene.id] = 1.0
 
     # Save parameters as part of the output object
     riptide_object.fraction_of_optimum = fraction
@@ -380,10 +384,11 @@ def contextualize(model, transcriptome = 'none', samples = 500, silent = False, 
     riptide_object.metabolic_tasks = tasks
 
     # Remove totally blocked reactions to speed up subsequent sections
-    blocked_rxns = set(find_blocked_reactions(riptide_model))
-    blocked_rxns = blocked_rxns.difference(set(tasks))
-    blocked_rxns = list(blocked_rxns.union(set(exclude)))
-    riptide_model = _prune_model(riptide_model, blocked_rxns, conservative)
+    rm_rxns = list(set(exclude).difference(set(tasks)))
+    if len(rm_rxns) > 0:
+    	riptide_model = _prune_model(riptide_model, rm_rxns, conservative)
+
+    # Define linear coefficients for both steps
     min_coefficient_dict, max_coefficient_dict, gene_hits, important_type = _assign_coefficients(transcriptome, riptide_model, minimum, gpr, defined, additive, exch_weight, important)
     riptide_object.minimization_coefficients = min_coefficient_dict
     riptide_object.maximization_coefficients = max_coefficient_dict

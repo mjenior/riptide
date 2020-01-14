@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: riptide
-Version: 2.7.7
+Version: 2.8.0
 Summary: Reaction Inclusion by Parsimony and Transcript Distribution (RIPTiDe)
 Home-page: https://github.com/mjenior/riptide
 Author: Matthew Jenior
@@ -16,12 +16,7 @@ Description: # RIPTiDe
         
         Please cite when using:
         ```
-        Jenior ML, Moutinho Jr TJ, Dougherty BV, & Papin JA. (2020). Transcriptome-guided parsimonious flux analysis improves predictions with metabolic networks in complex environments. PLOS Comp Biol....
-        ```
-        
-        Utilizes python implementation of the gapsplit flux sampler. Please also cite:
-        ```
-        Keaty TC & Jensen PA (2020). Gapsplit: Efficient random sampling for non-convex constraint-based models. Bioinformatics. btz971. https://doi.org/10.1093/bioinformatics/btz971.
+        Jenior ML, Moutinho Jr TJ, Dougherty BV, & Papin JA. (2020). Transcriptome-guided parsimonious flux analysis improves predictions with metabolic networks in complex environments. PLOS Comp Biol. 
         ```
         
         ## Dependencies
@@ -180,7 +175,7 @@ Description: # RIPTiDe
         Flux through the objective DECREASED to ~54.71 from ~65.43 (16.38% change)
         Contextualized GENRE is concordant with the transcriptome (p=0.003 *)
         
-        RIPTiDe completed in 29 seconds
+        RIPTiDe completed in 21 seconds
         
         ```
         

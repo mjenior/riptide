@@ -8,12 +8,7 @@ Transcriptomic analyses of bacteria have become instrumental to our understandin
 
 Please cite when using:
 ```
-Jenior ML, Moutinho Jr TJ, Dougherty BV, & Papin JA. (2020). Transcriptome-guided parsimonious flux analysis improves predictions with metabolic networks in complex environments. PLOS Comp Biol....
-```
-
-Utilizes python implementation of the gapsplit flux sampler. Please also cite:
-```
-Keaty TC & Jensen PA (2020). Gapsplit: Efficient random sampling for non-convex constraint-based models. Bioinformatics. btz971. https://doi.org/10.1093/bioinformatics/btz971.
+Jenior ML, Moutinho Jr TJ, Dougherty BV, & Papin JA. (2020). Transcriptome-guided parsimonious flux analysis improves predictions with metabolic networks in complex environments. PLOS Comp Biol. 
 ```
 
 ## Dependencies
@@ -172,7 +167,7 @@ Metabolites pruned to 285 from 1132 (74.82% change)
 Flux through the objective DECREASED to ~54.71 from ~65.43 (16.38% change)
 Contextualized GENRE is concordant with the transcriptome (p=0.003 *)
 
-RIPTiDe completed in 29 seconds
+RIPTiDe completed in 21 seconds
 
 ```
 
