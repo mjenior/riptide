@@ -23,6 +23,7 @@ class riptideClass:
         self.transcriptome = 'NULL'
         self.minimization_coefficients = 'NULL'
         self.maximization_coefficients = 'NULL'
+        self.pruned = 'NULL'
         self.flux_samples = 'NULL'
         self.flux_variability = 'NULL'
         self.fraction_of_optimum = 'NULL'
@@ -65,6 +66,7 @@ def save_riptide_output(riptide_obj='NULL', path='NULL', file_type='SBML'):
         os.mkdir(path)
     except:
         print('WARNING: Output path already exists, overwriting previous files')
+        pass
 
     # Write model to file
     if file_type.upper() == 'JSON':
@@ -124,6 +126,10 @@ def save_riptide_output(riptide_obj='NULL', path='NULL', file_type='SBML'):
             parameters.write('Pooled transcript based on GPR: Yes\n')
         else:
             parameters.write('Pooled transcript based on GPR: No\n')
+        if riptide_obj.additional_parameters['open_exchanges'] == True:
+            parameters.write('Exchange reactions switched open: Yes\n')
+        else:
+            parameters.write('Exchange reactions switched open: No\n')
         if riptide_obj.additional_parameters['silent'] == True:
             parameters.write('Run in silent mode: Yes\n')
         else:
@@ -261,7 +267,7 @@ def _assign_quantiles(transcription, quant_max, quant_min, step):
 # Create context-specific model based on transcript distribution
 def contextualize(model, transcriptome = 'none', samples = 500, silent = False, exch_weight = False,
     fraction = 0.8, minimum = None, conservative = False, objective = True, additive = False, important = [],
-    set_bounds = True, tasks = [], exclude = [], gpr = False, threshold = 1e-6, defined = False):
+    set_bounds = True, tasks = [], exclude = [], gpr = False, threshold = 1e-6, defined = False, open_exchanges = False):
 
     '''Reaction Inclusion by Parsimony and Transcriptomic Distribution or RIPTiDe
     
@@ -324,6 +330,9 @@ def contextualize(model, transcriptome = 'none', samples = 500, silent = False, 
         User defined range of linear coeffients, needs to be defined in a list like [1, 0.5, 0.1, 0.01, 0.001]
         Works best paired with binned abundance catagories from riptide.read_transcription_file()
         Default is False
+    open_exchanges : bool
+        Identifies and sets all exchange reaction bounds to (-1000.0, 1000.0)
+        Default is False
     '''
 
     start_time = time.time()
@@ -336,6 +345,7 @@ def contextualize(model, transcriptome = 'none', samples = 500, silent = False, 
     riptide_object.additional_parameters['objective'] = objective
     riptide_object.additional_parameters['additive'] = additive
     riptide_object.additional_parameters['set_bounds'] = set_bounds
+    riptide_object.additional_parameters['open_exchanges'] = open_exchanges
 
     # Correct some possible user error
     samples = int(samples)
@@ -383,6 +393,12 @@ def contextualize(model, transcriptome = 'none', samples = 500, silent = False, 
     riptide_model.id = str(riptide_model.id) + '_riptide'
     riptide_object.metabolic_tasks = tasks
 
+    # Open exchange reactions
+    if open_exchanges == True:
+        for rxn in riptide_model.reactions:
+            if len(set([x.id for x in rxn.metabolites])) == 1:
+                rxn.bounds = (-1000., 1000.)
+
     # Remove totally blocked reactions to speed up subsequent sections
     rm_rxns = list(set(exclude).difference(set(tasks)))
     if len(rm_rxns) > 0:
@@ -398,6 +414,7 @@ def contextualize(model, transcriptome = 'none', samples = 500, silent = False, 
     if silent == False: print('Pruning zero flux subnetworks...')
     rm_rxns = _constrain_and_analyze_model(riptide_model, min_coefficient_dict, fraction, 0, objective, tasks, minimum_threshold)
     riptide_model = _prune_model(riptide_model, rm_rxns, conservative)
+    riptide_object.pruned = _record_pruned_elements(model, riptide_model)
 
     # Find optimal solution space based on transcription and final constraints
     if silent == False: print('Analyzing context-specific flux distributions...')
@@ -407,7 +424,10 @@ def contextualize(model, transcriptome = 'none', samples = 500, silent = False, 
     riptide_object.concordance = concordance
 
     # Assign new reaction bounds
-    if set_bounds == True: riptide_model = _set_new_bounds(riptide_model, fva_result)
+    if set_bounds == True: 
+        for rxn in riptide_model.reactions:
+            fva_result = list(fva_result.loc[rxn.id])
+            rxn.bounds = (min(fva_result), max(fva_result))
     riptide_object.model = riptide_model
 
     # Report on included subset of user-defined important genes
@@ -644,11 +664,14 @@ def _constrain_and_analyze_model(model, coefficient_dict, fraction, sampling_dep
             
         # Analyze flux ranges and calculate concordance
         if sampling_depth != 1:
+            warnings.filterwarnings('ignore') # Handle possible infeasible warnings
         	flux_samples = _gapsplit(constrained_model, n=sampling_depth)
+            warnings.filterwarnings('default')
         	concordance = _calc_concordance(flux_samples, coefficient_dict)
         else:
         	flux_samples = 'Not performed'
         	concordance = 'Not performed'
+            
         fva = flux_variability_analysis(constrained_model, fraction_of_optimum=fraction)
 
         return flux_samples, fva, concordance
@@ -705,8 +728,30 @@ def _prune_model(new_model, rm_rxns, conserve):
 
     # Prune orphaned nodes
     new_model = _complete_orphan_prune(new_model)
-    
+
     return new_model
+
+
+# Record IDs of all pruned elements
+def _record_pruned_elements(old_model, new_model):
+    prunedDict = {}
+
+    # Genes
+    old_genes = set([x.id fr x in old_model.genes])
+    new_genes = set([y.id fr y in new_model.genes])
+    prunedDict['genes'] = old_genes.difference(new_genes)
+
+    # Reactions
+    old_rxns = set([x.id fr x in old_model.reactions])
+    new_rxns = set([y.id fr y in new_model.reactions])
+    prunedDict['reactions'] = old_rxns.difference(new_rxns)
+
+    # Metabolites
+    old_cpds = set([x.id fr x in old_model.metabolites])
+    new_cpds = set([y.id fr y in new_model.metabolites])
+    prunedDict['metabolites'] = old_cpds.difference(new_cpds)
+
+    return prunedDict
 
 
 # Thoroughly remove orphan reactions and metabolites
@@ -725,17 +770,6 @@ def _complete_orphan_prune(model):
         for rxn in model.reactions:
             if len(rxn.metabolites) == 0: 
                 rxn.remove_from_model(); removed = 1
-
-    return model
-
-
-# Use flux variability analysis on the constrained model to set new reaction bounds
-def _set_new_bounds(model, fva):
-
-    # Set new bounds for all reactions
-    for rxn in model.reactions:
-        fva_result = list(fva.loc[rxn.id])
-        rxn.bounds = (min(fva_result), max(fva_result))
 
     return model
 
@@ -782,31 +816,25 @@ def _operation_report(start_time, model, riptide, concordance):
 
     # Report concordance
     if concordance != 'Not performed':
-    	if concordance['r'] > 0.0 and concordance['p'] <= 0.05:
+        rho = 'r=' + str(round(concordance['r'], 3))
+    	if concordance['p'] <= 0.05:
     		p_val = round(concordance['p'], 3)
     		if p_val == 0.0:
-    			p_val = 'p<<0.001 ***'
-    		elif p_val <= 0.001:
-    			p_val = 'p=' + str(p_val) + ' ***'
-    		elif p_val <= 0.01:
-    			p_val = 'p=' + str(p_val) + ' **'
-    		elif p_val <= 0.05:
+    			p_val = 'p<0.001 *'
+    		else:
     			p_val = 'p=' + str(p_val) + ' *'
-    		rho = 'r=' + str(round(concordance['r'], 3))
     		print('Context-specific metabolism correlates with transcriptome (' + rho + ', ' + p_val + ')')
+        else:
+            print('Context-specific metabolism does not correlate with transcriptome (' + rho + ', n.s.)')
 
     # Run time
-    raw_seconds = round(time.time() - start_time)
+    raw_seconds = int(round(time.time() - start_time))
     report_dict['run_time'] = raw_seconds
     if raw_seconds < 60:
-        print('\nRIPTiDe completed in ' + str(int(raw_seconds)) + ' seconds\n')
-    elif raw_seconds < 3600:
-        minutes, seconds = divmod(raw_seconds, 60)
-        print('\nRIPTiDe completed in ' + str(int(minutes)) + ' minutes and ' + str(int(seconds)) + ' seconds\n')
+        print('\nRIPTiDe completed in ' + str(raw_seconds) + ' seconds\n')
     else:
         minutes, seconds = divmod(raw_seconds, 60)
-        hours, minutes = divmod(minutes, 60)
-        print('\nRIPTiDe completed in ' + str(int(hours)) + ' hours, ' + str(int(minutes)) + ' minutes, and ' + str(int(seconds)) + ' seconds\n')
+        print('\nRIPTiDe completed in ' + str(minutes) + ' minutes and ' + str(int(seconds)) + ' seconds\n')
 
     return report_dict
 
@@ -816,71 +844,36 @@ def _operation_report(start_time, model, riptide, concordance):
 # Keaty TC & Jensen PA (2019). gapsplit: Efficient random sampling for non-convex constraint-based models.
 # bioRxiv 652917; doi: https://doi.org/10.1101/652917 
 
-def _gapsplit(model, n=500):
-
-    # Define a few more variables
-    max_tries=1000
-    primary_tol=0.001
-    secondary_frac=0.05
-    min_range=1e-5
-    enforce_range=True
-
-    warnings.filterwarnings('ignore') # Handle uninformative infeasible warning
-
-    reactions = model.reactions
-    fva = flux_variability_analysis(model, reactions, fraction_of_optimum=0.001)
-
-    if secondary_frac >= 1.0:
-        n_secondary = secondary_frac
-    else:
-        n_secondary = numpy.floor(secondary_frac * len(model.reactions)).astype(int)
+def _gapsplit(model, depth):
+    fva = flux_variability_analysis(model, model.reactions, fraction_of_optimum=0.001)
 
     # only split reactions with feasible range >= min_range
-    idxs = (fva.maximum - fva.minimum >= min_range).to_numpy().nonzero()[0]
+    idxs = (fva.maximum - fva.minimum >= 1e-5).to_numpy().nonzero()[0]
     weights = (1.0 / (fva.maximum - fva.minimum) ** 2).to_numpy()
-
-    samples = numpy.zeros((n, len(model.reactions)))
+    samples = numpy.zeros((depth, len(model.reactions)))
     k = 0
-    infeasible_count = 0
-
-    for try_ in range(max_tries):
+    for try_ in range(1000):
         relative, target, width = _maxgap(samples[0:k,idxs], fva.iloc[idxs,:])
-        
         primary_var = numpy.argmax(relative)
         primary_target = target[primary_var]
-        primary_lb = primary_target - primary_tol*width[primary_var]
-        primary_ub = primary_target + primary_tol*width[primary_var]
+        primary_lb = primary_target - 0.001*width[primary_var]
+        primary_ub = primary_target + 0.001*width[primary_var]
 
-        secondary_vars = numpy.random.choice(len(idxs), n_secondary, replace=False)
-        secondary_targets = target[secondary_vars]
-        secondary_weights = weights[idxs[secondary_vars]]
-
-        new_sample = _generate_sample(
-            model, idxs[primary_var], primary_lb, primary_ub,
-            idxs[secondary_vars], secondary_targets, secondary_weights)
+        new_sample = _generate_sample(model, idxs[primary_var], primary_lb, primary_ub)
         if new_sample is not None:
-            if enforce_range:
-                new_sample[new_sample > fva.maximum] = fva.maximum[new_sample > fva.maximum]
-                new_sample[new_sample < fva.minimum] = fva.minimum[new_sample < fva.minimum]
-
+            new_sample[new_sample > fva.maximum] = fva.maximum[new_sample > fva.maximum]
+            new_sample[new_sample < fva.minimum] = fva.minimum[new_sample < fva.minimum]
             samples[k,:] = new_sample
             k += 1
-        else:
-            infeasible_count += 1
+        if k >= depth: break
 
-        if k >= n: break
-
-    if k < n:
-        # max_tries reached; return fewer than n samples
+    if k < depth:
+        # max_tries reached; return fewer samples
         samples = samples[:k,:]
 
-    warnings.filterwarnings('default') # Return warnings to previous settings
-    return pandas.DataFrame(data=samples,columns=fva.maximum.index)
+    return pandas.DataFrame(data=samples, columns=fva.maximum.index)
 
-
-def _generate_sample(
-        model, primary_var, primary_lb, primary_ub,
-        secondary_vars=None, secondary_targets=None, secondary_weights=None):
+def _generate_sample(model, primary_var, primary_lb, primary_ub):
     
     # Formulate a [MI]QP to find a single solution
     with model:
@@ -892,7 +885,6 @@ def _generate_sample(
             return None
         else:
             return solution.fluxes
-
 
 def _maxgap(points, fva):
     points = points.copy()

@@ -120,6 +120,9 @@ defined : False or list
     User defined range of linear coeffients, needs to be defined in a list like [1, 0.5, 0.1, 0.01, 0.001]
     Works best paired with binned abundance catagories from riptide.read_transcription_file()
     Default is False
+open_exchanges : bool
+    Identifies and sets all exchange reaction bounds to (-1000.0, 1000.0)
+    Default is False
 ```
 
 **riptide.save_riptide_output() - Writes RIPTiDe results to files in a new directory**
@@ -139,6 +142,8 @@ file_type : str
 
 
 ## Usage
+
+**SUGGESTION:** Open all extracellular exchange reactions in model prior to the implementation of RIPTiDe for the best results
 
 ```python
 from riptide import *
@@ -178,6 +183,7 @@ RIPTiDe completed in 21 seconds
 - **percent_of_mapping** - Percent of genes in mapping file found in input GENRE
 - **minimization_coefficients** - Linear coefficients used during flux sum minimization
 - **maximization_coefficients** - Linear coefficients for each reaction based used during flux sampling
+- **pruned** - Dictionary containing the IDs of genes, reactions, and metabolites pruned by RIPTiDe
 - **flux_samples** - Flux samples from constrained model
 - **flux_variability** - Flux variability analysis from constrained model
 - **fraction_of_optimum** - Minimum specified percentage of optimal objective flux during contextualization
