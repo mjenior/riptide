@@ -95,6 +95,14 @@ def save_riptide_output(riptide_obj='NULL', path='NULL', file_type='SBML'):
         for rxn in riptide_obj.maximization_coefficients.keys():
             max_coefficients.write(rxn + '\t' + str(riptide_obj.maximization_coefficients[rxn]) + '\n')
 
+    # Write pruned model component IDs to a tsv
+    outFile = path + '/pruned_components.tsv'
+    with open(outFile, 'w') as pruned:
+    	line = 'Genes:\t' + '\t'.join(riptide_obj.pruned['genes']) + '\n'
+    	line += 'Reactions:\t' + '\t'.join(riptide_obj.pruned['reactions']) + '\n'
+    	line += 'Metabolites:\t' + '\t'.join(riptide_obj.pruned['metabolites']) + '\n'
+    	pruned.write(line)
+
     # Assemble parameters and output metrics text file
     outFile = path + '/parameters.txt'
     with open(outFile, 'w') as parameters:
