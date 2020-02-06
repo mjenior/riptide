@@ -57,7 +57,7 @@ def save_riptide_output(riptide_obj='NULL', path='NULL', file_type='SBML'):
     '''
 
     if riptide_obj == 'NULL':
-    	raise ValueError('ERROR: Did not provide a RIPTiDe object')
+        raise ValueError('ERROR: Did not provide a RIPTiDe object')
     
     if path == 'NULL':
         print('WARNING: Did not provide an output directory. Using default riptide_files in working directory')
@@ -374,11 +374,11 @@ def contextualize(model, transcriptome = 'none', samples = 500, silent = False, 
 
     # Creates artificial transcriptome to identify most parsimonious patterns of metabolism
     if transcriptome == 'none':
-    	if silent == False:
-    		print('WARNING: No transcriptome provided. Analyzing most parsimonious state')
-    	transcriptome = {}
-    	for gene in model.genes:
-    		transcriptome[gene.id] = 1.0
+        if silent == False:
+            print('WARNING: No transcriptome provided. Analyzing most parsimonious state')
+        transcriptome = {}
+        for gene in model.genes:
+            transcriptome[gene.id] = 1.0
 
     # Save parameters as part of the output object
     riptide_object.fraction_of_optimum = fraction
@@ -402,7 +402,7 @@ def contextualize(model, transcriptome = 'none', samples = 500, silent = False, 
     # Remove totally blocked reactions to speed up subsequent sections
     rm_rxns = list(set(exclude).difference(set(tasks)))
     if len(rm_rxns) > 0:
-    	riptide_model = _prune_model(riptide_model, rm_rxns, conservative)
+        riptide_model = _prune_model(riptide_model, rm_rxns, conservative)
 
     # Define linear coefficients for both steps
     min_coefficient_dict, max_coefficient_dict, gene_hits, important_type = _assign_coefficients(transcriptome, riptide_model, minimum, gpr, defined, additive, exch_weight, important)
@@ -426,8 +426,8 @@ def contextualize(model, transcriptome = 'none', samples = 500, silent = False, 
     # Assign new reaction bounds
     if set_bounds == True: 
         for rxn in riptide_model.reactions:
-            fva_result = list(fva_result.loc[rxn.id])
-            rxn.bounds = (min(fva_result), max(fva_result))
+            current_fva = list(fva_result.loc[rxn.id])
+            rxn.bounds = (min(current_fva), max(current_fva))
     riptide_object.model = riptide_model
 
     # Report on included subset of user-defined important genes
@@ -665,12 +665,12 @@ def _constrain_and_analyze_model(model, coefficient_dict, fraction, sampling_dep
         # Analyze flux ranges and calculate concordance
         if sampling_depth != 1:
             warnings.filterwarnings('ignore') # Handle possible infeasible warnings
-        	flux_samples = _gapsplit(constrained_model, n=sampling_depth)
+            flux_samples = _gapsplit(constrained_model, depth=sampling_depth)
             warnings.filterwarnings('default')
-        	concordance = _calc_concordance(flux_samples, coefficient_dict)
+            concordance = _calc_concordance(flux_samples, coefficient_dict)
         else:
-        	flux_samples = 'Not performed'
-        	concordance = 'Not performed'
+            flux_samples = 'Not performed'
+            concordance = 'Not performed'
             
         fva = flux_variability_analysis(constrained_model, fraction_of_optimum=fraction)
 
@@ -737,18 +737,18 @@ def _record_pruned_elements(old_model, new_model):
     prunedDict = {}
 
     # Genes
-    old_genes = set([x.id fr x in old_model.genes])
-    new_genes = set([y.id fr y in new_model.genes])
+    old_genes = set([x.id for x in old_model.genes])
+    new_genes = set([y.id for y in new_model.genes])
     prunedDict['genes'] = old_genes.difference(new_genes)
 
     # Reactions
-    old_rxns = set([x.id fr x in old_model.reactions])
-    new_rxns = set([y.id fr y in new_model.reactions])
+    old_rxns = set([x.id for x in old_model.reactions])
+    new_rxns = set([y.id for y in new_model.reactions])
     prunedDict['reactions'] = old_rxns.difference(new_rxns)
 
     # Metabolites
-    old_cpds = set([x.id fr x in old_model.metabolites])
-    new_cpds = set([y.id fr y in new_model.metabolites])
+    old_cpds = set([x.id for x in old_model.metabolites])
+    new_cpds = set([y.id for y in new_model.metabolites])
     prunedDict['metabolites'] = old_cpds.difference(new_cpds)
 
     return prunedDict
@@ -812,18 +812,18 @@ def _operation_report(start_time, model, riptide, concordance):
             perc_shift = round(abs(perc_shift), 2)
             print('Flux through the objective INCREASED to ~' + str(new_ov) + ' from ' + str(old_ov) + ' (' + str(perc_shift) + '% change)')
     else:
-    	report_dict['obj_change'] = 'fails'
+        report_dict['obj_change'] = 'fails'
 
     # Report concordance
     if concordance != 'Not performed':
         rho = 'r=' + str(round(concordance['r'], 3))
-    	if concordance['p'] <= 0.05:
-    		p_val = round(concordance['p'], 3)
-    		if p_val == 0.0:
-    			p_val = 'p<0.001 *'
-    		else:
-    			p_val = 'p=' + str(p_val) + ' *'
-    		print('Context-specific metabolism correlates with transcriptome (' + rho + ', ' + p_val + ')')
+        if concordance['p'] <= 0.05:
+            p_val = round(concordance['p'], 3)
+            if p_val == 0.0:
+                p_val = 'p<0.001 *'
+            else:
+                p_val = 'p=' + str(p_val) + ' *'
+            print('Context-specific metabolism correlates with transcriptome (' + rho + ', ' + p_val + ')')
         else:
             print('Context-specific metabolism does not correlate with transcriptome (' + rho + ', n.s.)')
 
