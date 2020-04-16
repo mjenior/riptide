@@ -37,7 +37,7 @@ class riptideClass:
 
 
 # Save the output of RIPTiDe in a newly created directory
-def save_riptide_output(riptide_obj='NULL', path='NULL', file_type='SBML'):
+def save_output(riptide_obj='NULL', path='NULL', file_type='SBML'):
     '''Writes RIPTiDe results to files in a new directory
     
     Parameters
@@ -275,7 +275,7 @@ def _assign_quantiles(transcription, quant_max, quant_min, step):
 # Create context-specific model based on transcript distribution
 def contextualize(model, transcriptome = 'none', samples = 500, silent = False, exch_weight = False,
     fraction = 0.8, minimum = None, conservative = False, objective = True, additive = False, important = [],
-    set_bounds = True, tasks = [], exclude = [], gpr = False, threshold = 1e-6, defined = False, open_exchanges = False):
+    set_bounds = False, tasks = [], exclude = [], gpr = False, threshold = 1e-6, defined = False, open_exchanges = False):
 
     '''Reaction Inclusion by Parsimony and Transcriptomic Distribution or RIPTiDe
     
@@ -323,7 +323,7 @@ def contextualize(model, transcriptome = 'none', samples = 500, silent = False, 
         Default is False
     set_bounds : bool
         Uses flax variability analysis results from constrained model to set new bounds for all reactions
-        Default is True
+        Default is False
     tasks : list
         List of gene or reaction ID strings for forced inclusion in final model (metabolic tasks or essential genes)
     exclude : list
@@ -403,9 +403,7 @@ def contextualize(model, transcriptome = 'none', samples = 500, silent = False, 
 
     # Open exchange reactions
     if open_exchanges == True:
-        for rxn in riptide_model.reactions:
-            if len(set([x.id for x in rxn.metabolites])) == 1:
-                rxn.bounds = (-1000., 1000.)
+        for rxn in riptide_model.boundary: rxn.bounds = (-1000., 1000.)
 
     # Remove totally blocked reactions to speed up subsequent sections
     rm_rxns = list(set(exclude).difference(set(tasks)))

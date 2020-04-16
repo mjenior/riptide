@@ -105,7 +105,7 @@ essential : list
     Default is False
 set_bounds : bool
     Uses flax variability analysis results from constrained model to set new bounds for all reactions
-    Default is True
+    Default is False
 tasks : list
     List of gene or reaction ID strings for forced inclusion in final model (metabolic tasks or essential genes)
 exclude : list
@@ -125,7 +125,7 @@ open_exchanges : bool
     Default is False
 ```
 
-**riptide.save_riptide_output() - Writes RIPTiDe results to files in a new directory**
+**riptide.save_output() - Writes RIPTiDe results to files in a new directory**
 ```
 REQUIRED
 riptide_obj : RIPTiDe object
@@ -157,7 +157,7 @@ riptide_object_1_a = riptide.contextualize(model=my_model, transcriptome=transcr
 riptide_object_1_b = riptide.contextualize(model=my_model, transcriptome=transcript_abundances_1, tasks=['rxn1'], exclude=['rxn2','rxn3'])
 riptide_object_2 = riptide.contextualize(model=my_model, transcriptome=transcript_abundances_2)
 
-riptide.save_riptide_output(riptide_obj=riptide_object_1_a, path='~/Desktop/riptide_output')
+riptide.save_output(riptide_obj=riptide_object_1_a, path='~/Desktop/riptide_output')
 ``` 
 
 ### Example stdout report:
@@ -170,9 +170,9 @@ Analyzing context-specific flux distributions...
 Reactions pruned to 285 from 1129 (74.76% change)
 Metabolites pruned to 285 from 1132 (74.82% change)
 Flux through the objective DECREASED to ~54.71 from ~65.43 (16.38% change)
-Contextualized GENRE is concordant with the transcriptome (p=0.003 *)
+Context-specific metabolism correlates with transcriptome (r=0.149, p=0.011 *)
 
-RIPTiDe completed in 21 seconds
+RIPTiDe completed in 17 seconds
 
 ```
 
