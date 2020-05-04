@@ -275,7 +275,7 @@ def _assign_quantiles(transcription, quant_max, quant_min, step):
 # Create context-specific model based on transcript distribution
 def contextualize(model, transcriptome = 'none', samples = 500, silent = False, exch_weight = False,
     fraction = 0.8, minimum = None, conservative = False, objective = True, additive = False, important = [],
-    set_bounds = False, tasks = [], exclude = [], gpr = False, threshold = 1e-6, defined = False, open_exchanges = False):
+    set_bounds = True, tasks = [], exclude = [], gpr = False, threshold = 1e-6, defined = False, open_exchanges = False):
 
     '''Reaction Inclusion by Parsimony and Transcriptomic Distribution or RIPTiDe
     
@@ -337,9 +337,6 @@ def contextualize(model, transcriptome = 'none', samples = 500, silent = False, 
     defined : False or list
         User defined range of linear coeffients, needs to be defined in a list like [1, 0.5, 0.1, 0.01, 0.001]
         Works best paired with binned abundance catagories from riptide.read_transcription_file()
-        Default is False
-    open_exchanges : bool
-        Identifies and sets all exchange reaction bounds to (-1000.0, 1000.0)
         Default is False
     '''
 
@@ -464,12 +461,14 @@ def _assign_coefficients(raw_transcription_dict, model, minimum, gpr, defined_co
     # Screen transcriptomic abundances for genes that are included in model
     rxn_transcript_dict = {}
     total = 0.0
+    success = 0.0
     fail = 0.0
     for gene in model.genes:
         total += 1.0
         try:
             current_abund = float(raw_transcription_dict[gene.id]) + 1.0
             current_rxns = list(model.genes.get_by_id(gene.id).reactions)
+            success += 1.0
             for rxn in current_rxns:
                 try:
                     rxn_transcript_dict[rxn.id].append(current_abund)
@@ -478,8 +477,11 @@ def _assign_coefficients(raw_transcription_dict, model, minimum, gpr, defined_co
         except KeyError:
             fail += 1.0
             continue
-    # Check if any genes were found
-    if total == fail: raise LookupError('ERROR: No gene IDs in transcriptome dictionary found in model.')
+    # Check if any or very few genes were found
+    if total == fail: 
+        raise LookupError('ERROR: No gene IDs in transcriptome dictionary found in model.')
+    elif success < (len(model.genes) * 0.5):
+        print('WARNING: Fewer than half of model genes were found in transcriptome mapping file.')
     gene_hits = (float(total - fail) / total) * 100.0
     gene_hits = str(round(gene_hits, 2)) + '%'
     nogene_abund = numpy.median(list(set(raw_transcription_dict.values())))

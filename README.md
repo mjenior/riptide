@@ -120,9 +120,6 @@ defined : False or list
     User defined range of linear coeffients, needs to be defined in a list like [1, 0.5, 0.1, 0.01, 0.001]
     Works best paired with binned abundance catagories from riptide.read_transcription_file()
     Default is False
-open_exchanges : bool
-    Identifies and sets all exchange reaction bounds to (-1000.0, 1000.0)
-    Default is False
 ```
 
 **riptide.save_output() - Writes RIPTiDe results to files in a new directory**
@@ -143,7 +140,12 @@ file_type : str
 
 ## Usage
 
-**SUGGESTION:** Open all extracellular exchange reactions in model prior to the implementation of RIPTiDe for the best results
+**Comments before starting:** 
+- Make sure that genes in the transcriptome file matches those that are in your model.
+- Check the example files for proper data formatting
+- Binning genes into discrete thresholds for coefficient assignment is available in riptide.read_transcription_file() (not recommended)
+- Opening the majority of exchange reactions (bounds = +/- 1000) may yeild better prediction when extracellular conditions are unknown
+- The resulting RIPTiDe object has multiple properties including the context-specific model and flux analyses, accessing each is described below
 
 ```python
 from riptide import *
@@ -177,6 +179,7 @@ RIPTiDe completed in 17 seconds
 ```
 
 ### Resulting RIPTiDe object (class) properties:
+The resulting object is basically a container for the following data structures.
 
 - **model** - Contextualized genome-scale metabolic network reconstruction
 - **transcriptome** - Transcriptomic abundances provided by user
@@ -193,6 +196,14 @@ RIPTiDe completed in 17 seconds
 - **defined_coefficients** - Range of linear coefficients RIPTiDe is allowed to utilize provided as a list
 - **included_important** - Reactions or Genes included in the final model which the user defined as important
 - **additional_parameters** - Dictionary of additional parameters RIPTiDe uses
+
+**Examples of accessing components of RIPTiDe output:**
+```python
+context_specific_GENRE = riptide_object.model
+context_specific_FVA = riptide_object.flux_variability
+context_specific_flux_samples = riptide_object.flux_samples
+```
+
 
 ## Additional Information
 
