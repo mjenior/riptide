@@ -310,7 +310,7 @@ def contextualize(model, transcriptome = 'none', samples = 500, silent = False, 
         Minimum linear coefficient allowed during weight calculation for pFBA
         Default is None
     conservative : bool
-        Conservatively remove inactive reactions based on genes
+        Conservatively remove inactive reactions based on GPR rules (all member reactions must be inactive to prune)
         Default is False
     objective : bool
         Sets previous objective function as a constraint with minimum flux equal to user input fraction
