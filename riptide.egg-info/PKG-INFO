@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: riptide
-Version: 2.8.7
+Version: 2.8.9
 Summary: Reaction Inclusion by Parsimony and Transcript Distribution (RIPTiDe)
 Home-page: https://github.com/mjenior/riptide
 Author: Matthew Jenior
@@ -112,8 +112,8 @@ Description: # RIPTiDe
             List of gene or reaction ID strings for which the highest weights are assigned regardless of transcription
             Default is False
         set_bounds : bool
-            Uses flax variability analysis results from constrained model to set new bounds for all reactions
-            Default is False
+            Uses flux variability analysis results from constrained model to set new bounds for all reactions
+            Default is True
         tasks : list
             List of gene or reaction ID strings for forced inclusion in final model (metabolic tasks or essential genes)
         exclude : list

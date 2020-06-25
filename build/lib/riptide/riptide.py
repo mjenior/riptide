@@ -322,8 +322,8 @@ def contextualize(model, transcriptome = 'none', samples = 500, silent = False, 
         List of gene or reaction ID strings for which the highest weights are assigned regardless of transcription
         Default is False
     set_bounds : bool
-        Uses flax variability analysis results from constrained model to set new bounds for all reactions
-        Default is False
+        Uses flux variability analysis results from constrained model to set new bounds for all reactions
+        Default is True
     tasks : list
         List of gene or reaction ID strings for forced inclusion in final model (metabolic tasks or essential genes)
     exclude : list
