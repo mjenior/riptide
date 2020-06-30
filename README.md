@@ -178,6 +178,9 @@ RIPTiDe completed in 17 seconds
 
 ```
 
+In the final step, RIPTiDe assesses the fit of transcriptomic data for the calculated network activity through correlation of transcript abundance and median flux value for each corresponding reaction. The Spearman correlation coefficient and associated p-value are the reported following the fraction of network topology that is pruned during the flux minimization step.
+
+
 ### Resulting RIPTiDe object (class) properties:
 The resulting object is basically a container for the following data structures.
 
