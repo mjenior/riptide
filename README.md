@@ -45,6 +45,12 @@ replicates : boolean
 sep: string
     Defines what character separates entries on each line
     Defaults to tab (.tsv)
+rarefy : bool
+    Rarefies rounded transcript abundances to 90% of the smallest replicate
+    Default is False
+level : int
+    Level by which to rarefy samples
+    Default is 100000
 binning : boolean
     Perform discrete binning of transcript abundances into quantiles
     OPTIONAL, not advised
@@ -85,6 +91,11 @@ silent  : bool
 exch_weight : bool
     Weight exchange reactions the same as adjacent transporters
     Default is True
+processes : int
+    The number of parallel processes to run for FVA. Optional and if not passed,
+    will be set to the number of CPUs found. Necessary to change if
+    your trying to run paralell instance of RIPTiDe on the same machine
+    Default is none
 fraction : float
     Minimum percent of optimal objective value during FBA steps
     Default is 0.8
@@ -120,6 +131,9 @@ defined : False or list
     User defined range of linear coeffients, needs to be defined in a list like [1, 0.5, 0.1, 0.01, 0.001]
     Works best paired with binned abundance catagories from riptide.read_transcription_file()
     Default is False
+open_exchanges : bool
+    Sets all exchange reactions bounds to (-1000., 1000)
+    Default is False
 ```
 
 **riptide.save_output() - Writes RIPTiDe results to files in a new directory**
@@ -135,6 +149,31 @@ file_type : str
     Type of output file for RIPTiDe model
     Accepts either sbml or json
     Default is SBML
+```
+
+**riptide.iterative() - Iterative RIPTiDe for a range of minimum objective fluxes**
+```
+REQUIRED
+model : cobra.Model
+    The model to be contextualized
+transcriptome : dictionary
+    Dictionary of transcript abundances, output of read_transcription_file()
+samples : int 
+    Number of flux samples to collect
+    Default is 500
+frac_min : float
+    Lower bound for range of minimal fractions to test
+    Default is 0.65
+frac_max : float
+    Upper bound for range of minimal fractions to test
+    Default is 0.85
+frac_step : float
+    Increment to parse input minimal fraction range
+    Default is 0.02
+
+OPTIONAL
+    All other optional parameters for riptide.contextualize()
+'''
 ```
 
 

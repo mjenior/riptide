@@ -273,7 +273,7 @@ def _assign_quantiles(transcription, quant_max, quant_min, step):
 
 
 # Create context-specific model based on transcript distribution
-def contextualize(model, transcriptome = 'none', samples = 500, silent = False, exch_weight = False,
+def contextualize(model, transcriptome = 'none', samples = 500, silent = False, exch_weight = False, processes=None,
     fraction = 0.8, minimum = None, conservative = False, objective = True, additive = False, important = [],
     set_bounds = True, tasks = [], exclude = [], gpr = False, threshold = 1e-6, defined = False, open_exchanges = False):
 
@@ -303,6 +303,11 @@ def contextualize(model, transcriptome = 'none', samples = 500, silent = False, 
     exch_weight : bool
         Weight exchange reactions the same as adjacent transporters
         Default is True
+    processes : int
+        The number of parallel processes to run for FVA. Optional and if not passed,
+        will be set to the number of CPUs found. Necessary to change if
+        your trying to run paralell instance of RIPTiDe on the same machine
+        Default is none
     fraction : float
         Minimum percent of optimal objective value during FBA steps
         Default is 0.8
@@ -337,6 +342,9 @@ def contextualize(model, transcriptome = 'none', samples = 500, silent = False, 
     defined : False or list
         User defined range of linear coeffients, needs to be defined in a list like [1, 0.5, 0.1, 0.01, 0.001]
         Works best paired with binned abundance catagories from riptide.read_transcription_file()
+        Default is False
+    open_exchanges : bool
+        Sets all exchange reactions bounds to (-1000., 1000)
         Default is False
     '''
 
@@ -400,7 +408,7 @@ def contextualize(model, transcriptome = 'none', samples = 500, silent = False, 
 
     # Open exchange reactions
     if open_exchanges == True:
-        for rxn in riptide_model.boundary: rxn.bounds = (-1000., 1000.)
+        for rxn in riptide_model.exchanges: rxn.bounds = (-1000., 1000.)
 
     # Remove totally blocked reactions to speed up subsequent sections
     rm_rxns = list(set(exclude).difference(set(tasks)))
@@ -415,13 +423,13 @@ def contextualize(model, transcriptome = 'none', samples = 500, silent = False, 
     
     # Prune now inactive network sections based on coefficients
     if silent == False: print('Pruning zero flux subnetworks...')
-    rm_rxns = _constrain_and_analyze_model(riptide_model, min_coefficient_dict, fraction, 0, objective, tasks, minimum_threshold)
+    rm_rxns = _constrain_and_analyze_model(riptide_model, min_coefficient_dict, fraction, 0, objective, tasks, minimum_threshold, cpus=processes)
     riptide_model = _prune_model(riptide_model, rm_rxns, conservative)
     riptide_object.pruned = _record_pruned_elements(model, riptide_model)
 
     # Find optimal solution space based on transcription and final constraints
     if silent == False: print('Analyzing context-specific flux distributions...')
-    flux_samples, fva_result, concordance = _constrain_and_analyze_model(riptide_model, max_coefficient_dict, fraction, samples, objective, tasks)
+    flux_samples, fva_result, concordance = _constrain_and_analyze_model(riptide_model, max_coefficient_dict, fraction, samples, objective, tasks, cpus=processes)
     riptide_object.flux_samples = flux_samples
     riptide_object.flux_variability = fva_result
     riptide_object.concordance = concordance
@@ -628,7 +636,7 @@ def _integrate_important(model, important, coefficient_dict):
 
 
 # Determine those reactions that carry flux in a pFBA objective set to a threshold of maximum
-def _constrain_and_analyze_model(model, coefficient_dict, fraction, sampling_depth, objective, tasks, minimum_threshold=1e-6):
+def _constrain_and_analyze_model(model, coefficient_dict, fraction, sampling_depth, objective, tasks, minimum_threshold=1e-6, cpus):
     
     constrained_model = copy.deepcopy(model)
 
@@ -673,14 +681,14 @@ def _constrain_and_analyze_model(model, coefficient_dict, fraction, sampling_dep
         # Analyze flux ranges and calculate concordance
         if sampling_depth != 1:
             warnings.filterwarnings('ignore') # Handle possible infeasible warnings
-            flux_samples = _gapsplit(constrained_model, depth=sampling_depth)
+            flux_samples = _gapsplit(constrained_model, depth=sampling_depth, cpus=cpus)
             warnings.filterwarnings('default')
             concordance = _calc_concordance(flux_samples, coefficient_dict)
         else:
             flux_samples = 'Not performed'
             concordance = 'Not performed'
             
-        fva = flux_variability_analysis(constrained_model, fraction_of_optimum=fraction)
+        fva = flux_variability_analysis(constrained_model, fraction_of_optimum=fraction, processes=cpus)
 
         return flux_samples, fva, concordance
 
@@ -852,8 +860,8 @@ def _operation_report(start_time, model, riptide, concordance):
 # Keaty TC & Jensen PA (2019). gapsplit: Efficient random sampling for non-convex constraint-based models.
 # bioRxiv 652917; doi: https://doi.org/10.1101/652917 
 
-def _gapsplit(model, depth):
-    fva = flux_variability_analysis(model, model.reactions, fraction_of_optimum=0.001)
+def _gapsplit(model, depth, cpus):
+    fva = flux_variability_analysis(model, model.reactions, fraction_of_optimum=0.001, processes=cpus)
 
     # only split reactions with feasible range >= min_range
     idxs = (fva.maximum - fva.minimum >= 1e-5).to_numpy().nonzero()[0]
@@ -910,3 +918,97 @@ def _maxgap(points, fva):
     target = left + width / 2.0
 
     return relative, target, width
+
+
+#-----------------------------------------------------------------#
+
+
+# Iteratively run RIPTiDe over a range of objective minimum fractions
+def iterative(model, transcriptome = 'none', frac_min = 0.65, frac_max = 0.85, frac_step = 0.02, samples = 500, exch_weight = False, 
+    processes = None, minimum = None, conservative = False, objective = True, additive = False, important = [], set_bounds = True, 
+    tasks = [], exclude = [], gpr = False, threshold = 1e-6, defined = False, open_exchanges = False):
+
+    '''Iterative RIPTiDe for a range of minimum objective fluxes
+    
+    Parameters
+    ----------
+
+    REQUIRED
+    model : cobra.Model
+        The model to be contextualized
+    transcriptome : dictionary
+        Dictionary of transcript abundances, output of read_transcription_file()
+    samples : int 
+        Number of flux samples to collect
+        Default is 500
+    frac_min : float
+        Lower bound for range of minimal fractions to test
+        Default is 0.65
+    frac_max : float
+        Upper bound for range of minimal fractions to test
+        Default is 0.85
+    frac_step : float
+        Increment to parse input minimal fraction range
+        Default is 0.02
+
+    OPTIONAL
+    All other optional parameters for riptide.contextualize()
+    '''
+
+    iter_start = time.time()
+
+    if samples <= 100:
+        raise ValueError('ERROR: Iterative RIPTiDe requires >100 flux sampling depth')
+    if transcriptome == 'none':
+        raise ValueError('ERROR: Iterative RIPTiDe requires an input transcriptome')
+
+    if frac_min < 0. or frac_min > 1.:
+        print('WARNING: Improper minimum fraction provided, setting to default value')
+        frac_min = 0.65
+    elif frac_min > frac_max:
+        print('WARNING: Improper minimum fraction provided, setting to default value')
+        frac_min = 0.65
+
+    if frac_max < 0. or frac_max > 1.:
+        print('WARNING: Improper maximum fraction provided, setting to default value')
+        frac_max = 0.85
+    elif frac_max < frac_min:
+        print('WARNING: Improper maximum fraction provided, setting to default value')
+        frac_max = 0.85
+
+    if frac_step < 0. or frac_min > 1.:
+        print('WARNING: Improper fraction step provided, setting to default value')
+        frac_max = 0.02
+    frac_range = [x for x in range(frac_min, frac_max, frac_step)]
+    if len(frac_range) == 1:
+        print('WARNING: Only a single fraction is possible in the input bounds and fraction')
+
+    top_rho = 0.
+    iters = 0
+    for frac in frac_range:
+        iters += 1
+
+        iter_riptide = contextualize(model, transcriptome, fraction=frac, silent=True, samples=samples, exch_weight=exch_weight, 
+            processes=processes, minimum=minimum, conservative=conservative, 
+            objective=objective, additive=additive, important=important, set_bounds=set_bounds, tasks=tasks, exclude=exclude, 
+            gpr=gpr, threshold=threshold, defined=defined, open_exchanges=open_exchanges)
+
+        curr_rho = iter_riptide.concordance['r']
+        print('Iteration', iters, 'rho:', round(curr_rho, 3))
+        if curr_rho > top_rho:
+            top_fit = copy.deepcopy(iter_riptide)
+
+    top_fit.fraction_bounds = [frac_min, frac_max]
+    top_fit.fraction_step = frac_step
+
+    print('\nBest fit with', top_fit.fraction_of_optimum, 'of optimal objective flux')
+    raw_seconds = int(round(time.time() - iter_start))
+    report_dict['run_time'] = raw_seconds
+    if raw_seconds < 60:
+        print('\nIterative RIPTiDe completed in ' + str(raw_seconds) + ' seconds\n')
+    else:
+        minutes, seconds = divmod(raw_seconds, 60)
+        print('\nIterative RIPTiDe completed in ' + str(minutes) + ' minutes and ' + str(int(seconds)) + ' seconds\n')
+
+    return top_fit
+
