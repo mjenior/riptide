@@ -151,7 +151,7 @@ file_type : str
     Default is SBML
 ```
 
-**riptide.iterative() - Iterative RIPTiDe for a range of minimum objective fluxes**
+**riptide.maxfit_contextualize() - Iterative RIPTiDe for a range of minimum objective fluxes, returns model with best fit to transcriptome**
 ```
 REQUIRED
 model : cobra.Model
@@ -196,7 +196,8 @@ transcript_abundances_2 = riptide.read_transcription_file('examples/transcriptom
 
 riptide_object_1_a = riptide.contextualize(model=my_model, transcriptome=transcript_abundances_1)
 riptide_object_1_b = riptide.contextualize(model=my_model, transcriptome=transcript_abundances_1, tasks=['rxn1'], exclude=['rxn2','rxn3'])
-riptide_object_2 = riptide.contextualize(model=my_model, transcriptome=transcript_abundances_2)
+
+riptide_object_2_maxfit = riptide.maxfit_contextualize(model=my_model, transcriptome=transcript_abundances_2)
 
 riptide.save_output(riptide_obj=riptide_object_1_a, path='~/Desktop/riptide_output')
 ``` 
