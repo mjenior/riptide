@@ -169,7 +169,7 @@ def save_output(riptide_obj='NULL', path='NULL', file_type='SBML'):
         
 
 # Read in transcriptomic read abundances, default is tsv with no header 
-def read_transcription_file(file, header = False, replicates = False, sep = '\t', rarefy = False, level = 1e5,
+def read_transcription_file(file, header = False, replicates = False, sep = '\t', rarefy = False, level = 1e6,
     binning = False, quant_max = 0.9, quant_min = 0.5, step = 0.125, norm = True, factor = 1e6):
     '''Generates dictionary of transcriptomic abundances from a file
     
@@ -195,7 +195,7 @@ def read_transcription_file(file, header = False, replicates = False, sep = '\t'
         Default is False
     level : int
         Level by which to rarefy samples
-        Default is 100000
+        Default is 1000000
     binning : boolean
         Perform discrete binning of transcript abundances into quantiles
         OPTIONAL, not advised
@@ -226,6 +226,7 @@ def read_transcription_file(file, header = False, replicates = False, sep = '\t'
 
     # Read in file
     abund_dict = {}
+    reps = 1
     with open(file, 'r') as transcription:
         if header == True: header_line = transcription.readline()
 
@@ -233,7 +234,8 @@ def read_transcription_file(file, header = False, replicates = False, sep = '\t'
             line = line.split(sep)
             abundances = [float(x) for x in line[1:]]
             abund_dict[str(line[0])] = abundances
-            reps = len(abundances)
+            if reps < len(abundances):
+                reps = len(abundances)
 
     # Rarefy abundances
     if rarefy == True:
@@ -247,12 +249,18 @@ def read_transcription_file(file, header = False, replicates = False, sep = '\t'
             for z in range(0, len(genes)):
                 abund_dict[genes[z]][x] = curr_abund[z]
 
-    # Calculate median of replicates
-    if replicates == True or reps > 1:
+    # Calculate median of replicates if needed
+    if reps >= 2 and replicates == False:
+        print('WARNING: Replicates detected, calculating median transcript abundance for each gene')
+        replicates = True  
+    if replicates == True:
         for gene in abund_dict.keys():
             abund_dict[gene] = float(numpy.median(abund_dict[gene]))
+    else:
+        for gene in abund_dict.keys():
+            abund_dict[gene] = abund_dict[gene][0]
 
-    # Perform normalization if specified
+    # Perform reads per million normalization if specified
     if norm == True:
         total_transcript = float(sum(abund_dict.values()))
         for gene in abund_dict.keys():
@@ -261,7 +269,7 @@ def read_transcription_file(file, header = False, replicates = False, sep = '\t'
             abund_dict[gene] = new_abund
 
     # If user-defined, perform abundance binning by quantile
-    if binning != False:
+    if binning == True:
         print('Performing transcript abundance binning by quantile...')
         abund_dict = _assign_quantiles(abund_dict, quant_max, quant_min, step)
 
@@ -301,10 +309,11 @@ def _assign_quantiles(transcription, quant_max, quant_min, step):
 
 
 # Rarefies a list of numbers
-def _rarefy(counts, n):
+def _rarefy(abunds, n):
 
-    counts = numpy.array([round(x) for x in list(counts)])
-    if counts.sum() <= n: return list(result)
+    counts = numpy.array([round(x) for x in list(abunds)])
+    if counts.sum() <= n: 
+        return list(abunds)
 
     nz = counts.nonzero()[0]
     unpacked = numpy.concatenate([numpy.repeat(numpy.array(i,), counts[i]) for i in nz])
@@ -318,7 +327,7 @@ def _rarefy(counts, n):
 
 # Iteratively run RIPTiDe over a range of objective minimum fractions
 def maxfit_contextualize(model, transcriptome = 'none', frac_min = 0.65, frac_max = 0.85, frac_step = 0.02, samples = 500, exch_weight = False, 
-    processes = None, minimum = None, conservative = False, objective = True, additive = False, important = [], set_bounds = True, 
+    processes = None, minimum = None, conservative = False, objective = True, additive = False, important = [], set_bounds = True, silent = False,
     tasks = [], exclude = [], gpr = False, threshold = 1e-6, defined = False, open_exchanges = False):
 
     '''Iterative RIPTiDe for a range of minimum objective fluxes, returns model with best fit to transcriptome
@@ -377,6 +386,12 @@ def maxfit_contextualize(model, transcriptome = 'none', frac_min = 0.65, frac_ma
     if len(frac_range) == 1:
         print('WARNING: Only a single fraction is possible in the input bounds and fraction')
 
+    frac_min = round(frac_min, 3)
+    frac_max = round(frac_max, 3)
+    frac_step = round(frac_step, 3)
+    if silent == False:
+        print('\nRunning max fit RIPTiDe for objective fraction range:', frac_min, 'to', frac_max, 'with intervals of', frac_step, '\n')
+
     top_rho = 0.
     iters = 0
     for frac in frac_range:
@@ -387,22 +402,27 @@ def maxfit_contextualize(model, transcriptome = 'none', frac_min = 0.65, frac_ma
             objective=objective, additive=additive, important=important, set_bounds=set_bounds, tasks=tasks, exclude=exclude, 
             gpr=gpr, threshold=threshold, defined=defined, open_exchanges=open_exchanges)
 
-        curr_rho = iter_riptide.concordance['r']
-        print('Iteration', iters, 'rho:', round(curr_rho, 3))
+        curr_rho = round(iter_riptide.concordance['r'], 3)
+        curr_p = round(iter_riptide.concordance['p'], 3)
+        if silent == False:
+            print('Iter', iters, 'of', len(frac_range), '| frac =', frac, '| rho =', curr_rho, '; p =', curr_p)
+
         if curr_rho > top_rho:
             top_fit = copy.deepcopy(iter_riptide)
+            top_rho = curr_rho
+            top_p = curr_p
 
     top_fit.fraction_bounds = [frac_min, frac_max]
     top_fit.fraction_step = frac_step
 
-    print('\nBest fit with', top_fit.fraction_of_optimum, 'of optimal objective flux')
     raw_seconds = int(round(time.time() - iter_start))
-    report_dict['run_time'] = raw_seconds
-    if raw_seconds < 60:
-        print('\nIterative RIPTiDe completed in ' + str(raw_seconds) + ' seconds\n')
-    else:
-        minutes, seconds = divmod(raw_seconds, 60)
-        print('\nIterative RIPTiDe completed in ' + str(minutes) + ' minutes and ' + str(int(seconds)) + ' seconds\n')
+    if silent == False:
+        print('\nContext-specific metabolism best fit with', top_fit.fraction_of_optimum, 'of optimal objective flux')
+        if raw_seconds < 60:
+            print('\nMax fit RIPTiDe completed in ' + str(raw_seconds) + ' seconds\n')
+        else:
+            minutes, seconds = divmod(raw_seconds, 60)
+            print('\nMax fit RIPTiDe completed in ' + str(minutes) + ' minutes and ' + str(int(seconds)) + ' seconds\n')
 
     return top_fit
 

@@ -202,7 +202,7 @@ riptide_object_2_maxfit = riptide.maxfit_contextualize(model=my_model, transcrip
 riptide.save_output(riptide_obj=riptide_object_1_a, path='~/Desktop/riptide_output')
 ``` 
 
-### Example stdout report:
+### Example riptide.contextualize() stdout report:
 ```
 
 Initializing model and integrating transcriptomic data...
@@ -220,9 +220,32 @@ RIPTiDe completed in 17 seconds
 
 In the final step, RIPTiDe assesses the fit of transcriptomic data for the calculated network activity through correlation of transcript abundance and median flux value for each corresponding reaction. The Spearman correlation coefficient and associated p-value are the reported following the fraction of network topology that is pruned during the flux minimization step.
 
+### Example riptide.maxfit_contextualize() stdout report:
+```
+
+Running max fit RIPTiDe for objective fraction range: 0.65 to 0.85 with intervals of 0.02 
+
+Iter 1 of 10 | frac = 0.65 | rho = 0.15 ; p = 0.008
+Iter 2 of 10 | frac = 0.67 | rho = 0.159 ; p = 0.005
+Iter 3 of 10 | frac = 0.69 | rho = 0.165 ; p = 0.004
+Iter 4 of 10 | frac = 0.71 | rho = 0.186 ; p = 0.001
+Iter 5 of 10 | frac = 0.73 | rho = 0.183 ; p = 0.001
+Iter 6 of 10 | frac = 0.75 | rho = 0.168 ; p = 0.003
+Iter 7 of 10 | frac = 0.77 | rho = 0.173 ; p = 0.002
+Iter 8 of 10 | frac = 0.79 | rho = 0.143 ; p = 0.011
+Iter 9 of 10 | frac = 0.81 | rho = 0.121 ; p = 0.031
+Iter 10 of 10 | frac = 0.83 | rho = 0.144 ; p = 0.011
+
+Context-specific metabolism best fit with 0.71 of optimal objective flux
+
+Max fit RIPTiDe completed in 3 minutes and 17 seconds
+
+```
+
+Max fit RIPTiDe tests all minimum objective flux fractions over the provided range and returns only the model with the best Spearman correlation between context-specific flux for reactions and the associated transcriptomic values.
 
 ### Resulting RIPTiDe object (class) properties:
-The resulting object is basically a container for the following data structures.
+The resulting object is a container for the following data structures.
 
 - **model** - Contextualized genome-scale metabolic network reconstruction
 - **transcriptome** - Transcriptomic abundances provided by user
@@ -240,13 +263,17 @@ The resulting object is basically a container for the following data structures.
 - **included_important** - Reactions or Genes included in the final model which the user defined as important
 - **additional_parameters** - Dictionary of additional parameters RIPTiDe uses
 
+### Additional maxfit-only RIPTiDe object (class) properties:
+
+- **fraction_bounds** - Minimum and maximum values for the range of objective flux minimum fractions tested
+- **fraction_step** - Increment for series of objective flux minima created within fraction bound range
+
 **Examples of accessing components of RIPTiDe output:**
 ```python
 context_specific_GENRE = riptide_object.model
 context_specific_FVA = riptide_object.flux_variability
 context_specific_flux_samples = riptide_object.flux_samples
 ```
-
 
 ## Additional Information
 
