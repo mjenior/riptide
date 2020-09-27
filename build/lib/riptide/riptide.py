@@ -340,9 +340,8 @@ def maxfit_contextualize(model, transcriptome = 'none', frac_min = 0.65, frac_ma
         The model to be contextualized
     transcriptome : dictionary
         Dictionary of transcript abundances, output of read_transcription_file()
-    samples : int 
-        Number of flux samples to collect
-        Default is 500
+    
+    OPTIONAL
     frac_min : float
         Lower bound for range of minimal fractions to test
         Default is 0.65
@@ -356,7 +355,7 @@ def maxfit_contextualize(model, transcriptome = 'none', frac_min = 0.65, frac_ma
     	Exits early if next subsequent iteration has a worse correlation
     	Default is True
 
-    OPTIONAL
+    ADDITIONAL
     All other optional parameters for riptide.contextualize()
     '''
 
