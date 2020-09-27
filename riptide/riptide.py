@@ -151,9 +151,9 @@ def save_output(riptide_obj='NULL', path='NULL', file_type='SBML'):
         else:
             parameters.write('Run in silent mode: No\n\n')
         if riptide_obj.fraction_bounds != 'NULL':
-             parameters.write('Iterative optimal fraction lower bound: ' + str(riptide_obj.fraction_bounds[0]) + '\n')
-             parameters.write('Iterative optimal fraction upper bound: ' + str(riptide_obj.fraction_bounds[1]) + '\n')
-             parameters.write('Iterative optimal fraction step: ' + str(riptide_obj.fraction_step) + '\n')
+             parameters.write('Max fit optimal fraction lower bound: ' + str(riptide_obj.fraction_bounds[0]) + '\n')
+             parameters.write('Max fit optimal fraction upper bound: ' + str(riptide_obj.fraction_bounds[1]) + '\n')
+             parameters.write('Max fit optimal fraction step: ' + str(riptide_obj.fraction_step) + '\n')
 
         # Results
         parameters.write('Percent pruned reactions: ' + str(riptide_obj.additional_parameters['operation']['reactions']) + '%\n')
@@ -326,9 +326,9 @@ def _rarefy(abunds, n):
 
 
 # Iteratively run RIPTiDe over a range of objective minimum fractions
-def maxfit_contextualize(model, transcriptome = 'none', frac_min = 0.65, frac_max = 0.85, frac_step = 0.02, samples = 500, exch_weight = False, 
-    processes = None, minimum = None, conservative = False, objective = True, additive = False, important = [], set_bounds = True, silent = False,
-    tasks = [], exclude = [], gpr = False, threshold = 1e-6, defined = False, open_exchanges = False):
+def maxfit_contextualize(model, transcriptome = 'none', frac_min = 0.65, frac_max = 0.85, frac_step = 0.02, first_max = True,
+	samples = 500, exch_weight = False, processes = None, minimum = None, conservative = False, objective = True, additive = False, 
+	important = [], set_bounds = True, silent = False, tasks = [], exclude = [], gpr = False, threshold = 1e-6, defined = False, open_exchanges = False):
 
     '''Iterative RIPTiDe for a range of minimum objective fluxes, returns model with best fit to transcriptome
     
@@ -352,6 +352,9 @@ def maxfit_contextualize(model, transcriptome = 'none', frac_min = 0.65, frac_ma
     frac_step : float
         Increment to parse input minimal fraction range
         Default is 0.02
+    first_max : bool
+    	Exits early if next subsequent iteration has a worse correlation
+    	Default is True
 
     OPTIONAL
     All other optional parameters for riptide.contextualize()
@@ -404,25 +407,36 @@ def maxfit_contextualize(model, transcriptome = 'none', frac_min = 0.65, frac_ma
 
         curr_rho = round(iter_riptide.concordance['r'], 3)
         curr_p = round(iter_riptide.concordance['p'], 3)
-        if silent == False:
-            print('Iter', iters, 'of', len(frac_range), '| frac =', frac, '| rho =', curr_rho, '; p =', curr_p)
-
-        if curr_rho > top_rho:
+        
+        if curr_rho >= top_rho:
             top_fit = copy.deepcopy(iter_riptide)
             top_rho = curr_rho
             top_p = curr_p
+        elif first_max == True:
+        	if curr_rho < top_rho:
+        		print('Top correlation found, exiting search...')
+        		break
+        
+        if silent == False:
+            print('Iter', iters, 'of', len(frac_range), '| frac =', frac, '| rho =', curr_rho, '; p =', curr_p)
 
     top_fit.fraction_bounds = [frac_min, frac_max]
     top_fit.fraction_step = frac_step
 
     raw_seconds = int(round(time.time() - iter_start))
     if silent == False:
-        print('\nContext-specific metabolism best fit with', top_fit.fraction_of_optimum, 'of optimal objective flux')
+        print('\nContext-specific metabolism fit with', top_fit.fraction_of_optimum, 'of optimal objective flux')
         if raw_seconds < 60:
             print('\nMax fit RIPTiDe completed in ' + str(raw_seconds) + ' seconds\n')
         else:
             minutes, seconds = divmod(raw_seconds, 60)
-            print('\nMax fit RIPTiDe completed in ' + str(minutes) + ' minutes and ' + str(int(seconds)) + ' seconds\n')
+            mins = 'minute'
+            if minutes > 1:
+                mins = 'minutes'
+            secs = 'second'
+            if seconds > 1:
+                secs = 'seconds'
+            print('\nMax fit RIPTiDe completed in,', str(minutes), mins, 'and', str(int(seconds)), secs, '\n')
 
     return top_fit
 
@@ -610,13 +624,9 @@ def contextualize(model, transcriptome = 'none', samples = 500, silent = False, 
         riptide_object.included_important = important
 
     # Analyze changes introduced by RIPTiDe and return results
-    if silent == False: 
-        report_dict = _operation_report(start_time, model, riptide_model, concordance)
-        riptide_object.additional_parameters['operation'] = report_dict
-    else:
-        if model.slim_optimize() < 1e-6 or str(model.slim_optimize()) == 'nan':
-            print('WARNING: Contextualized model objective can no longer carry flux')
-            
+    report_dict = _operation_report(start_time, model, riptide_model, concordance, silent)
+    riptide_object.additional_parameters['operation'] = report_dict
+
     return riptide_object
 
 
@@ -946,17 +956,19 @@ def _complete_orphan_prune(model):
 
 
 # Reports how long RIPTiDe took to run
-def _operation_report(start_time, model, riptide, concordance):
+def _operation_report(start_time, model, riptide, concordance, silent):
     report_dict = {}
 
     # Pruning
     perc_removal = 100.0 - ((float(len(riptide.reactions)) / float(len(model.reactions))) * 100.0)
     perc_removal = round(perc_removal, 2)
-    print('\nReactions pruned to ' + str(len(riptide.reactions)) + ' from ' + str(len(model.reactions)) + ' (' + str(perc_removal) + '% change)')
+    if silent == False:
+        print('\nReactions pruned to ' + str(len(riptide.reactions)) + ' from ' + str(len(model.reactions)) + ' (' + str(perc_removal) + '% change)')
     report_dict['reactions'] = perc_removal
     perc_removal = 100.0 - ((float(len(riptide.metabolites)) / float(len(model.metabolites))) * 100.0)
     perc_removal = round(perc_removal, 2)
-    print('Metabolites pruned to ' + str(len(riptide.metabolites)) + ' from ' + str(len(model.metabolites)) + ' (' + str(perc_removal) + '% change)')
+    if silent == False:
+        print('Metabolites pruned to ' + str(len(riptide.metabolites)) + ' from ' + str(len(model.metabolites)) + ' (' + str(perc_removal) + '% change)')
     report_dict['metabolites'] = perc_removal
 
     # Flux through objective
@@ -964,7 +976,8 @@ def _operation_report(start_time, model, riptide, concordance):
     # Check that prune model can still achieve flux through the objective (just in case)
     try:
         if riptide.slim_optimize() < 1e-6 or str(riptide.slim_optimize()) == 'nan':
-            print('WARNING: Contextualized model objective can no longer carry flux')
+            if silent == False:
+                print('WARNING: Contextualized model objective can no longer carry flux')
             model_check = 'broken'
     except:
         pass
@@ -978,10 +991,12 @@ def _operation_report(start_time, model, riptide, concordance):
             pass
         elif perc_shift > 0.0:
             perc_shift = round(abs(perc_shift), 2)
-            print('Flux through the objective DECREASED to ~' + str(new_ov) + ' from ~' + str(old_ov) + ' (' + str(perc_shift) + '% change)')
+            if silent == False:
+                print('Flux through the objective DECREASED to ~' + str(new_ov) + ' from ~' + str(old_ov) + ' (' + str(perc_shift) + '% change)')
         elif perc_shift < 0.0:
             perc_shift = round(abs(perc_shift), 2)
-            print('Flux through the objective INCREASED to ~' + str(new_ov) + ' from ' + str(old_ov) + ' (' + str(perc_shift) + '% change)')
+            if silent == False:
+                print('Flux through the objective INCREASED to ~' + str(new_ov) + ' from ' + str(old_ov) + ' (' + str(perc_shift) + '% change)')
     else:
         report_dict['obj_change'] = 'fails'
 
@@ -994,18 +1009,27 @@ def _operation_report(start_time, model, riptide, concordance):
                 p_val = 'p<0.001 *'
             else:
                 p_val = 'p=' + str(p_val) + ' *'
-            print('Context-specific metabolism correlates with transcriptome (' + rho + ', ' + p_val + ')')
+            if silent == False:
+                print('Context-specific metabolism correlates with transcriptome (' + rho + ', ' + p_val + ')')
         else:
-            print('Context-specific metabolism does not correlate with transcriptome (' + rho + ', n.s.)')
+            if silent == False:
+                print('Context-specific metabolism does not correlate with transcriptome (' + rho + ', n.s.)')
 
     # Run time
     raw_seconds = int(round(time.time() - start_time))
     report_dict['run_time'] = raw_seconds
-    if raw_seconds < 60:
-        print('\nRIPTiDe completed in ' + str(raw_seconds) + ' seconds\n')
-    else:
-        minutes, seconds = divmod(raw_seconds, 60)
-        print('\nRIPTiDe completed in ' + str(minutes) + ' minutes and ' + str(int(seconds)) + ' seconds\n')
+    if silent == False:
+        if raw_seconds < 60:
+            print('\nRIPTiDe completed in ' + str(raw_seconds) + ' seconds\n')
+        else:
+            minutes, seconds = divmod(raw_seconds, 60)
+            mins = 'minute'
+            if minutes > 1:
+                mins = 'minutes'
+            secs = 'second'
+            if seconds > 1:
+                secs = 'seconds'
+            print('\nRIPTiDe completed in,', str(minutes), mins, 'and', str(int(seconds)), secs, '\n')
 
     return report_dict
 
