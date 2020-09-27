@@ -424,7 +424,7 @@ def maxfit_contextualize(model, transcriptome = 'none', frac_min = 0.65, frac_ma
         		break
     
     if skip_final == False:
-        print('Testing local objective fractions to ' + str(round(top_rho, 3)) + '...')
+        print('Testing local objective fractions to ' + str(top_fit.fraction_of_optimum) + '...')
         new_step = round(frac_step / 2.0, 3)
         frac = round(top_fit.fraction_of_optimum, 3)
 

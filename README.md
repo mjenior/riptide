@@ -227,23 +227,23 @@ In the final step, RIPTiDe assesses the fit of transcriptomic data for the calcu
 
 Running max fit RIPTiDe for objective fraction range: 0.65 to 0.85 with intervals of 0.02 
 
-Iter 1 of 10 | frac = 0.65 | rho = 0.207 ; p = 0.0
-Iter 2 of 10 | frac = 0.67 | rho = 0.207 ; p = 0.0
-Iter 3 of 10 | frac = 0.69 | rho = 0.208 ; p = 0.0
-Iter 4 of 10 | frac = 0.71 | rho = 0.19 ; p = 0.001
-Iter 5 of 10 | frac = 0.73 | rho = 0.187 ; p = 0.001
-Iter 6 of 10 | frac = 0.75 | rho = 0.175 ; p = 0.002
-Iter 7 of 10 | frac = 0.77 | rho = 0.183 ; p = 0.001
-Iter 8 of 10 | frac = 0.79 | rho = 0.18 ; p = 0.002
-Iter 9 of 10 | frac = 0.81 | rho = 0.177 ; p = 0.002
-Iter 10 of 10 | frac = 0.83 | rho = 0.186 ; p = 0.001
-Testing surrounding objective fractions...
-Partial fraction increment (1 of 2) | frac = 0.68 | rho = 0.205 ; p = 0.0
-Partial fraction increment (2 of 2) | frac = 0.7 | rho = 0.208 ; p = 0.0
+Iter 1 of 10 | frac = 0.65 | rho = 0.133240946224708 ; p = 0.022539650586387808
+Iter 2 of 10 | frac = 0.67 | rho = 0.14077134473559572 ; p = 0.015894179122544805
+Iter 3 of 10 | frac = 0.69 | rho = 0.1520149134045448 ; p = 0.009524663445348861
+Iter 4 of 10 | frac = 0.71 | rho = 0.13110725631615502 ; p = 0.024321642238502965
+Iter 5 of 10 | frac = 0.73 | rho = 0.13237289551367823 ; p = 0.02227922201118654
+Iter 6 of 10 | frac = 0.75 | rho = 0.16300275363352243 ; p = 0.004717779535792638
+Iter 7 of 10 | frac = 0.77 | rho = 0.1654088122634874 ; p = 0.004130926552670629
+Iter 8 of 10 | frac = 0.79 | rho = 0.14987674311575683 ; p = 0.00886481076374894
+Iter 9 of 10 | frac = 0.81 | rho = 0.14130237734773532 ; p = 0.011919438643686176
+Iter 10 of 10 | frac = 0.83 | rho = 0.1462715719228634 ; p = 0.009217085164184352
+Testing local objective fractions to 0.77...
+Partial fraction increment (1 of 2) | frac = 0.76 | rho = 0.15531657586600148 ; p = 0.007128666937148176
+Partial fraction increment (2 of 2) | frac = 0.78 | rho = 0.15220140666126936 ; p = 0.008385013921449185
 
-Context-specific metabolism fit with 0.7 of optimal objective flux
+Context-specific metabolism fit with 0.77 of optimal objective flux
 
-Max fit RIPTiDe completed in, 3 minutes and 33 seconds 
+Max fit RIPTiDe completed in, 4 minutes and 33 seconds  
 
 ```
 
