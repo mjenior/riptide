@@ -171,7 +171,7 @@ frac_step : float
     Default is 0.02
 first_max : bool
     Exits early if next subsequent iteration has a worse correlation
-    Default is True
+    Default is False
 
 ADDITIONAL
     All other optional parameters for riptide.contextualize()
@@ -227,19 +227,27 @@ In the final step, RIPTiDe assesses the fit of transcriptomic data for the calcu
 
 Running max fit RIPTiDe for objective fraction range: 0.65 to 0.85 with intervals of 0.02 
 
-Iter 1 of 10 | frac = 0.65 | rho = 0.15 ; p = 0.008
-Iter 2 of 10 | frac = 0.67 | rho = 0.159 ; p = 0.005
-Iter 3 of 10 | frac = 0.69 | rho = 0.165 ; p = 0.004
-Iter 4 of 10 | frac = 0.71 | rho = 0.186 ; p = 0.001
-Top correlation found, exiting search...
+Iter 1 of 10 | frac = 0.65 | rho = 0.207 ; p = 0.0
+Iter 2 of 10 | frac = 0.67 | rho = 0.207 ; p = 0.0
+Iter 3 of 10 | frac = 0.69 | rho = 0.208 ; p = 0.0
+Iter 4 of 10 | frac = 0.71 | rho = 0.19 ; p = 0.001
+Iter 5 of 10 | frac = 0.73 | rho = 0.187 ; p = 0.001
+Iter 6 of 10 | frac = 0.75 | rho = 0.175 ; p = 0.002
+Iter 7 of 10 | frac = 0.77 | rho = 0.183 ; p = 0.001
+Iter 8 of 10 | frac = 0.79 | rho = 0.18 ; p = 0.002
+Iter 9 of 10 | frac = 0.81 | rho = 0.177 ; p = 0.002
+Iter 10 of 10 | frac = 0.83 | rho = 0.186 ; p = 0.001
+Testing surrounding objective fractions...
+Partial fraction increment (1 of 2) | frac = 0.68 | rho = 0.205 ; p = 0.0
+Partial fraction increment (2 of 2) | frac = 0.7 | rho = 0.208 ; p = 0.0
 
-Context-specific metabolism best fit with 0.71 of optimal objective flux
+Context-specific metabolism fit with 0.7 of optimal objective flux
 
-Max fit RIPTiDe completed in 1 minute and 32 seconds
+Max fit RIPTiDe completed in, 3 minutes and 33 seconds 
 
 ```
 
-Max fit RIPTiDe tests all minimum objective flux fractions over the provided range and returns only the model with the best Spearman correlation between context-specific flux for reactions and the associated transcriptomic values. The search is terminated if a subsequent iteration has a lower correlation coefficient than the last, however this could be a local maxima and must be considered if an exhaustive analysis is preferred.
+Max fit RIPTiDe tests all minimum objective flux fractions over the provided range and returns only the model with the best Spearman correlation between context-specific flux for reactions and the associated transcriptomic values. Note, terminating search if a subsequent iteration has a lower correlation coefficient than the last could result from a local maxima and must be considered if an exhaustive analysis is preferred.
 
 ### Resulting RIPTiDe object (class) properties:
 The resulting object is a container for the following data structures.

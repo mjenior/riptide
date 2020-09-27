@@ -326,7 +326,7 @@ def _rarefy(abunds, n):
 
 
 # Iteratively run RIPTiDe over a range of objective minimum fractions
-def maxfit_contextualize(model, transcriptome = 'none', frac_min = 0.65, frac_max = 0.85, frac_step = 0.02, first_max = True,
+def maxfit_contextualize(model, transcriptome = 'none', frac_min = 0.65, frac_max = 0.85, frac_step = 0.02, first_max = False,
 	samples = 500, exch_weight = False, processes = None, minimum = None, conservative = False, objective = True, additive = False, 
 	important = [], set_bounds = True, silent = False, tasks = [], exclude = [], gpr = False, threshold = 1e-6, defined = False, open_exchanges = False):
 
@@ -353,7 +353,7 @@ def maxfit_contextualize(model, transcriptome = 'none', frac_min = 0.65, frac_ma
         Default is 0.02
     first_max : bool
     	Exits early if next subsequent iteration has a worse correlation
-    	Default is True
+    	Default is False
 
     ADDITIONAL
     All other optional parameters for riptide.contextualize()
@@ -391,6 +391,12 @@ def maxfit_contextualize(model, transcriptome = 'none', frac_min = 0.65, frac_ma
     frac_min = round(frac_min, 3)
     frac_max = round(frac_max, 3)
     frac_step = round(frac_step, 3)
+    skip_final = False
+    if frac_step <= 0.01: 
+        skip_final = True
+    elif first_max == True:
+        skip_final = True
+
     if silent == False:
         print('\nRunning max fit RIPTiDe for objective fraction range:', frac_min, 'to', frac_max, 'with intervals of', frac_step, '\n')
 
@@ -406,6 +412,8 @@ def maxfit_contextualize(model, transcriptome = 'none', frac_min = 0.65, frac_ma
 
         curr_rho = round(iter_riptide.concordance['r'], 3)
         curr_p = round(iter_riptide.concordance['p'], 3)
+        if silent == False:
+            print('Iter', iters, 'of', len(frac_range), '| frac =', frac, '| rho =', curr_rho, '; p =', curr_p)
         
         if curr_rho >= top_rho:
             top_fit = copy.deepcopy(iter_riptide)
@@ -413,11 +421,37 @@ def maxfit_contextualize(model, transcriptome = 'none', frac_min = 0.65, frac_ma
             top_p = curr_p
         elif first_max == True:
         	if curr_rho < top_rho:
-        		print('Top correlation found, exiting search...')
+        		print('High correlation found, exiting search...')
         		break
-        
+    
+    if skip_final == False:
+        print('Testing surrounding objective fractions...')
+        new_step = round(frac_step / 2.0, 3)
+        frac = round(top_fit.fraction_of_optimum, 3)
+
+        lower_frac = round(frac - new_step, 3)
+        iter_riptide = contextualize(model, transcriptome, fraction=lower_frac, silent=True, samples=samples, exch_weight=exch_weight, 
+                        processes=processes, minimum=minimum, conservative=conservative, 
+                        objective=objective, additive=additive, important=important, set_bounds=set_bounds, tasks=tasks, exclude=exclude,
+                        gpr=gpr, threshold=threshold, defined=defined, open_exchanges=open_exchanges)
+        curr_rho = round(iter_riptide.concordance['r'], 3)
+        curr_p = round(iter_riptide.concordance['p'], 3)
         if silent == False:
-            print('Iter', iters, 'of', len(frac_range), '| frac =', frac, '| rho =', curr_rho, '; p =', curr_p)
+            print('Partial fraction increment (1 of 2) | frac =', lower_frac, '| rho =', curr_rho, '; p =', curr_p)
+        if curr_rho >= top_rho:
+            top_fit = copy.deepcopy(iter_riptide)
+
+        upper_frac = round(frac + new_step, 3)
+        iter_riptide = contextualize(model, transcriptome, fraction=upper_frac, silent=True, samples=samples, exch_weight=exch_weight, 
+                        processes=processes, minimum=minimum, conservative=conservative, 
+                        objective=objective, additive=additive, important=important, set_bounds=set_bounds, tasks=tasks, exclude=exclude,
+                        gpr=gpr, threshold=threshold, defined=defined, open_exchanges=open_exchanges)
+        curr_rho = round(iter_riptide.concordance['r'], 3)
+        curr_p = round(iter_riptide.concordance['p'], 3)
+        if silent == False:
+            print('Partial fraction increment (2 of 2) | frac =', upper_frac, '| rho =', curr_rho, '; p =', curr_p)
+        if curr_rho >= top_rho:
+            top_fit = copy.deepcopy(iter_riptide)
 
     top_fit.fraction_bounds = [frac_min, frac_max]
     top_fit.fraction_step = frac_step
