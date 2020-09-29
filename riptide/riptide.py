@@ -385,6 +385,7 @@ def maxfit_contextualize(model, transcriptome = 'none', frac_min = 0.65, frac_ma
         frac_max = 0.02
     
     frac_range = [round(x, 3) for x in list(numpy.arange(frac_min, frac_max, frac_step))]
+    frac_range.append(round(frac_max, 3))
     if len(frac_range) == 1:
         print('WARNING: Only a single fraction is possible in the input bounds and fraction')
 
@@ -402,6 +403,8 @@ def maxfit_contextualize(model, transcriptome = 'none', frac_min = 0.65, frac_ma
 
     top_rho = 0.
     iters = 0
+    if silent == False:
+        print('Testing minimum objective fractions...')
     for frac in frac_range:
         iters += 1
 
@@ -413,18 +416,20 @@ def maxfit_contextualize(model, transcriptome = 'none', frac_min = 0.65, frac_ma
         curr_rho = iter_riptide.concordance['r']
         curr_p = iter_riptide.concordance['p']
         if silent == False:
-            print('Iter', iters, 'of', len(frac_range), '| frac =', frac, '| rho =', curr_rho, '; p =', curr_p)
+            print('Fraction =', frac, '| Rho =', curr_rho, '; p =', curr_p)
         
         if curr_rho >= top_rho:
             top_fit = copy.deepcopy(iter_riptide)
             top_rho = curr_rho
         elif first_max == True:
         	if curr_rho < top_rho:
-        		print('High correlation found, exiting search...')
+                if silent == False:
+        		  print('High correlation found, exiting search...')
         		break
     
     if skip_final == False:
-        print('Testing local objective fractions to ' + str(top_fit.fraction_of_optimum) + '...')
+        if silent == False:
+            print('Testing local objective fractions to ' + str(top_fit.fraction_of_optimum) + '...')
         new_step = round(frac_step / 2.0, 3)
         frac = round(top_fit.fraction_of_optimum, 3)
 
@@ -436,7 +441,7 @@ def maxfit_contextualize(model, transcriptome = 'none', frac_min = 0.65, frac_ma
         curr_rho = iter_riptide.concordance['r']
         curr_p = iter_riptide.concordance['p']
         if silent == False:
-            print('Partial fraction increment (1 of 2) | frac =', lower_frac, '| rho =', curr_rho, '; p =', curr_p)
+            print('Fraction =', lower_frac, '| Rho =', curr_rho, '; p =', curr_p)
         if curr_rho >= top_rho:
             top_fit = copy.deepcopy(iter_riptide)
 
@@ -448,7 +453,7 @@ def maxfit_contextualize(model, transcriptome = 'none', frac_min = 0.65, frac_ma
         curr_rho = iter_riptide.concordance['r']
         curr_p = iter_riptide.concordance['p']
         if silent == False:
-            print('Partial fraction increment (2 of 2) | frac =', upper_frac, '| rho =', curr_rho, '; p =', curr_p)
+            print('Fraction =', upper_frac, '| Rho =', curr_rho, '; p =', curr_p)
         if curr_rho >= top_rho:
             top_fit = copy.deepcopy(iter_riptide)
 
@@ -459,7 +464,7 @@ def maxfit_contextualize(model, transcriptome = 'none', frac_min = 0.65, frac_ma
     if silent == False:
         print('\nContext-specific metabolism fit with', top_fit.fraction_of_optimum, 'of optimal objective flux')
         if raw_seconds < 60:
-            print('\nMax fit RIPTiDe completed in ' + str(raw_seconds) + ' seconds\n')
+            print('\nMax fit RIPTiDe completed in', int(raw_seconds), ' seconds\n')
         else:
             minutes, seconds = divmod(raw_seconds, 60)
             mins = 'minute'
@@ -468,7 +473,7 @@ def maxfit_contextualize(model, transcriptome = 'none', frac_min = 0.65, frac_ma
             secs = 'second'
             if seconds > 1:
                 secs = 'seconds'
-            print('\nMax fit RIPTiDe completed in,', str(minutes), mins, 'and', str(int(seconds)), secs, '\n')
+            print('\nMax fit RIPTiDe completed in', str(minutes), mins, 'and', str(int(seconds)), secs, '\n')
 
     return top_fit
 
@@ -764,41 +769,40 @@ def _assign_coefficients(raw_transcription_dict, model, minimum, gpr, defined_co
 # Assemble a corrected list of metabolic tasks based on user
 def _integrate_tasks(model, tasks):
     # Check that each task is in the model
-    screened_tasks = set()
-    for x in tasks:
+    screened_tasks = []
+    for x in set(tasks):
         # Genes
         try:
             rxns = list(model.genes.get_by_id(x).reactions)
-            rxns = set([y.id for y in rxns])
-            screened_tasks |= rxns
+            rxns = [y.id for y in rxns]
+            screened_tasks += rxns
         except:
             pass
         # Reactions
         try:
             rxn = model.reactions.get_by_id(x)
-            screened_tasks |= set([x])
+            screened_tasks.append(rxn.id)
         except:
             continue
 
+    # Check if any reactions were found in the model that correspond with supplied IDs
+    if len(screened_tasks) == 0:
+        print('WARNING: No reactions found associated with provided task IDs')
+
     # Iteratively set each as the objective and find new bounds
-    task_constraints = []
     for rxn in screened_tasks:
         model.objective = rxn
         task_obj_val = model.slim_optimize()
         # Check sign of objective value, just in case
         if task_obj_val > 0.0:
             task_constraint = model.problem.Constraint(model.objective.expression, lb=task_obj_val*0.01, ub=task_obj_val)
+            model.add_cons_vars(task_constraint)
+            model.solver.update()
         elif task_obj_val < 0.0:
             task_constraint = model.problem.Constraint(model.objective.expression, lb=task_obj_val, ub=task_obj_val*0.01)
-        task_constraints.append(task_constraint)
+            model.add_cons_vars(task_constraint)
+            model.solver.update()
     
-    # Check if any reactions were found in the model that correspond with supplied IDs
-    if len(task_constraints) == 0:
-        print('WARNING: No reactions found associated with provided task IDs')
-    else:
-        model.add_cons_vars(task_constraints)
-        model.solver.update()
-
     return model
 
 
@@ -809,25 +813,25 @@ def _integrate_important(model, important, coefficient_dict):
     weight = min(list(coefficient_dict.values()))
 
     # Check if reactions or genes, get reaction IDs
-    rxn_ids = set()
+    rxn_ids = []
     for x in important:
         # Genes
         try:
             rxns = list(model.genes.get_by_id(x).reactions)
-            rxn_ids |= set([y.id for y in rxns])
+            rxn_ids += [y.id for y in rxns]
             important_type = 'genes'
         except:
             pass
         # Reactions
         try:
             rxn = model.reactions.get_by_id(x)
-            rxn_ids |= set([x])
+            rxn_ids.append(rxn.id)
             important_type = 'reactions'
         except:
             continue
 
     # Correct weight in coefficient dictionary
-    for rxn in rxn_ids: coefficient_dict[rxn] = weight
+    for rxn in set(rxn_ids): coefficient_dict[rxn] = weight
 
     return coefficient_dict, important_type
 
