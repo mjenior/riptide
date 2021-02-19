@@ -111,8 +111,11 @@ objective : bool
 additive : bool
     Pool transcription abundances for reactions with multiple contributing gene products
     Default is False
-essential : list
+important : list
     List of gene or reaction ID strings for which the highest weights are assigned regardless of transcription
+    Default is False
+direct : bool
+    Assigns both minimization and maximization step coefficents directly, instead of relying on abundance distribution
     Default is False
 set_bounds : bool
     Uses flux variability analysis results from constrained model to set new bounds for all reactions

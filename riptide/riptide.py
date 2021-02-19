@@ -13,7 +13,6 @@ import itertools
 from cobra.util import solver
 from scipy.stats import spearmanr
 from numpy.random import permutation
-from cobra.manipulation.delete import remove_genes
 from cobra.flux_analysis import flux_variability_analysis
 
 
@@ -326,7 +325,7 @@ def _rarefy(abunds, n):
 
 
 # Iteratively run RIPTiDe over a range of objective minimum fractions
-def maxfit_contextualize(model, transcriptome = 'none', frac_min = 0.65, frac_max = 0.85, frac_step = 0.02, first_max = False,
+def maxfit_contextualize(model, transcriptome = 'none', frac_min = 0.35, frac_max = 0.95, frac_step = 0.05, first_max = False,
 	samples = 500, exch_weight = False, processes = None, minimum = None, conservative = False, objective = True, additive = False, 
 	important = [], set_bounds = True, silent = False, tasks = [], exclude = [], gpr = False, threshold = 1e-6, defined = False, open_exchanges = False):
 
@@ -385,18 +384,12 @@ def maxfit_contextualize(model, transcriptome = 'none', frac_min = 0.65, frac_ma
         frac_max = 0.02
     
     frac_range = [round(x, 3) for x in list(numpy.arange(frac_min, frac_max, frac_step))]
-    frac_range.append(round(frac_max, 3))
     if len(frac_range) == 1:
         print('WARNING: Only a single fraction is possible in the input bounds and fraction')
 
     frac_min = round(frac_min, 3)
     frac_max = round(frac_max, 3)
     frac_step = round(frac_step, 3)
-    skip_final = False
-    if frac_step <= 0.01: 
-        skip_final = True
-    elif first_max == True:
-        skip_final = True
 
     if silent == False:
         print('\nRunning max fit RIPTiDe for objective fraction range:', frac_min, 'to', frac_max, 'with intervals of', frac_step, '\n')
@@ -416,71 +409,62 @@ def maxfit_contextualize(model, transcriptome = 'none', frac_min = 0.65, frac_ma
         curr_rho = iter_riptide.concordance['r']
         curr_p = iter_riptide.concordance['p']
         if silent == False:
-            print('Fraction =', frac, '| Rho =', curr_rho, '; p =', curr_p)
+            print('Fraction =', frac, '| Rho =', round(curr_rho,4), '; p =', round(curr_p,4))
         
         if curr_rho >= top_rho:
             top_fit = copy.deepcopy(iter_riptide)
             top_rho = curr_rho
         elif first_max == True:
-        	if curr_rho < top_rho:
+            if curr_rho < top_rho:
                 if silent == False:
-        		  print('High correlation found, exiting search...')
-        		break
+                    print('High correlation found, exiting search...')
+                break
     
-    if skip_final == False:
-        if silent == False:
-            print('Testing local objective fractions to ' + str(top_fit.fraction_of_optimum) + '...')
-        new_step = round(frac_step / 2.0, 3)
-        frac = round(top_fit.fraction_of_optimum, 3)
+    if silent == False:
+        print('Testing local objective fractions to ' + str(top_fit.fraction_of_optimum) + '...')
+    new_step = round(frac_step / 2.0, 3)
+    frac = round(top_fit.fraction_of_optimum, 3)
 
-        lower_frac = round(frac - new_step, 3)
-        iter_riptide = contextualize(model, transcriptome, fraction=lower_frac, silent=True, samples=samples, exch_weight=exch_weight, 
-                        processes=processes, minimum=minimum, conservative=conservative, 
-                        objective=objective, additive=additive, important=important, set_bounds=set_bounds, tasks=tasks, exclude=exclude,
-                        gpr=gpr, threshold=threshold, defined=defined, open_exchanges=open_exchanges)
-        curr_rho = iter_riptide.concordance['r']
-        curr_p = iter_riptide.concordance['p']
-        if silent == False:
-            print('Fraction =', lower_frac, '| Rho =', curr_rho, '; p =', curr_p)
-        if curr_rho >= top_rho:
-            top_fit = copy.deepcopy(iter_riptide)
+    lower_frac = round(frac - new_step, 3)
+    iter_riptide = contextualize(model, transcriptome, fraction=lower_frac, silent=True, samples=samples, exch_weight=exch_weight, 
+                    processes=processes, minimum=minimum, conservative=conservative, 
+                    objective=objective, additive=additive, important=important, set_bounds=set_bounds, tasks=tasks, exclude=exclude,
+                    gpr=gpr, threshold=threshold, defined=defined, open_exchanges=open_exchanges)
+    curr_rho = iter_riptide.concordance['r']
+    curr_p = iter_riptide.concordance['p']
+    if silent == False:
+        print('Fraction =', lower_frac, '| Rho =', round(curr_rho,4), '; p =', round(curr_p,4))
+    if curr_rho >= top_rho:
+        top_fit = copy.deepcopy(iter_riptide)
 
-        upper_frac = round(frac + new_step, 3)
-        iter_riptide = contextualize(model, transcriptome, fraction=upper_frac, silent=True, samples=samples, exch_weight=exch_weight, 
-                        processes=processes, minimum=minimum, conservative=conservative, 
-                        objective=objective, additive=additive, important=important, set_bounds=set_bounds, tasks=tasks, exclude=exclude,
-                        gpr=gpr, threshold=threshold, defined=defined, open_exchanges=open_exchanges)
-        curr_rho = iter_riptide.concordance['r']
-        curr_p = iter_riptide.concordance['p']
-        if silent == False:
-            print('Fraction =', upper_frac, '| Rho =', curr_rho, '; p =', curr_p)
-        if curr_rho >= top_rho:
-            top_fit = copy.deepcopy(iter_riptide)
+    upper_frac = round(frac + new_step, 3)
+    iter_riptide = contextualize(model, transcriptome, fraction=upper_frac, silent=True, samples=samples, exch_weight=exch_weight, 
+                    processes=processes, minimum=minimum, conservative=conservative, 
+                    objective=objective, additive=additive, important=important, set_bounds=set_bounds, tasks=tasks, exclude=exclude,
+                    gpr=gpr, threshold=threshold, defined=defined, open_exchanges=open_exchanges)
+    curr_rho = iter_riptide.concordance['r']
+    curr_p = iter_riptide.concordance['p']
+    if silent == False:
+        print('Fraction =', upper_frac, '| Rho =', round(curr_rho,4), '; p =', round(curr_p,4))
+    if curr_rho >= top_rho:
+        top_fit = copy.deepcopy(iter_riptide)
 
     top_fit.fraction_bounds = [frac_min, frac_max]
     top_fit.fraction_step = frac_step
 
-    raw_seconds = int(round(time.time() - iter_start))
     if silent == False:
         print('\nContext-specific metabolism fit with', top_fit.fraction_of_optimum, 'of optimal objective flux')
-        if raw_seconds < 60:
-            print('\nMax fit RIPTiDe completed in', int(raw_seconds), ' seconds\n')
-        else:
-            minutes, seconds = divmod(raw_seconds, 60)
-            mins = 'minute'
-            if minutes > 1:
-                mins = 'minutes'
-            secs = 'second'
-            if seconds > 1:
-                secs = 'seconds'
-            print('\nMax fit RIPTiDe completed in', str(minutes), mins, 'and', str(int(seconds)), secs, '\n')
+
+    # Analyze changes introduced by RIPTiDe and return results
+    report_dict = _operation_report(iter_start, model, top_fit.model, top_fit.concordance, silent, mf=True)
+    top_fit.additional_parameters['operation'] = report_dict
 
     return top_fit
 
 
 # Create context-specific model based on transcript distribution
 def contextualize(model, transcriptome = 'none', samples = 500, silent = False, exch_weight = False, processes=None,
-    fraction = 0.8, minimum = None, conservative = False, objective = True, additive = False, important = [],
+    fraction = 0.8, minimum = None, conservative = False, objective = True, additive = False, important = [], direct = False,
     set_bounds = True, tasks = [], exclude = [], gpr = False, threshold = 1e-6, defined = False, open_exchanges = False):
 
     '''Reaction Inclusion by Parsimony and Transcriptomic Distribution or RIPTiDe
@@ -532,6 +516,9 @@ def contextualize(model, transcriptome = 'none', samples = 500, silent = False, 
     important : list
         List of gene or reaction ID strings for which the highest weights are assigned regardless of transcription
         Default is False
+    direct : bool
+        Assigns both minimization and maximization step coefficents directly, instead of relying on abundance distribution
+    	Default is False
     set_bounds : bool
         Uses flux variability analysis results from constrained model to set new bounds for all reactions
         Default is True
@@ -622,7 +609,7 @@ def contextualize(model, transcriptome = 'none', samples = 500, silent = False, 
         riptide_model = _prune_model(riptide_model, rm_rxns, conservative)
 
     # Define linear coefficients for both steps
-    min_coefficient_dict, max_coefficient_dict, gene_hits, important_type = _assign_coefficients(transcriptome, riptide_model, minimum, gpr, defined, additive, exch_weight, important)
+    min_coefficient_dict, max_coefficient_dict, gene_hits, important_type = _assign_coefficients(transcriptome, riptide_model, minimum, gpr, defined, additive, exch_weight, important, direct)
     riptide_object.minimization_coefficients = min_coefficient_dict
     riptide_object.maximization_coefficients = max_coefficient_dict
     riptide_object.percent_of_mapping = gene_hits
@@ -661,14 +648,14 @@ def contextualize(model, transcriptome = 'none', samples = 500, silent = False, 
         riptide_object.included_important = important
 
     # Analyze changes introduced by RIPTiDe and return results
-    report_dict = _operation_report(start_time, model, riptide_model, concordance, silent)
+    report_dict = _operation_report(start_time, model, riptide_model, concordance, silent, mf=False)
     riptide_object.additional_parameters['operation'] = report_dict
 
     return riptide_object
-
+ 
 
 # Converts a dictionary of transcript abundances to reaction linear coefficients
-def _assign_coefficients(raw_transcription_dict, model, minimum, gpr, defined_coefficients, additive, exch_weight, important):
+def _assign_coefficients(raw_transcription_dict, model, minimum, gpr, defined_coefficients, additive, exch_weight, important, direct):
     
     # Screen transcriptomic abundances for genes that are included in model
     rxn_transcript_dict = {}
@@ -738,9 +725,14 @@ def _assign_coefficients(raw_transcription_dict, model, minimum, gpr, defined_co
 
     # Calculate coefficients
     all_abundances = list(all_abundances)
+    denom = max(all_abundances)
     all_abundances.sort()
-    max_coefficients = [x / max(all_abundances) for x in all_abundances]
-    min_coefficients = max_coefficients[::-1]
+    max_coefficients = [x / denom for x in all_abundances]
+    if direct == True:
+    	fctr = 1.0 + min(max_coefficients)
+    	min_coefficients = [fctr - (x / denom) for x in all_abundances]
+    else:
+    	min_coefficients = max_coefficients[::-1]
     coefficient_dict = {}
     for x in range(0, len(all_abundances)):
         coefficient_dict[all_abundances[x]] = [min_coefficients[x], max_coefficients[x]]
@@ -992,7 +984,7 @@ def _complete_orphan_prune(model):
 
 
 # Reports how long RIPTiDe took to run
-def _operation_report(start_time, model, riptide, concordance, silent):
+def _operation_report(start_time, model, riptide, concordance, silent, mf):
     report_dict = {}
 
     # Pruning
@@ -1065,7 +1057,11 @@ def _operation_report(start_time, model, riptide, concordance, silent):
             secs = 'second'
             if seconds > 1:
                 secs = 'seconds'
-            print('\nRIPTiDe completed in,', str(minutes), mins, 'and', str(int(seconds)), secs, '\n')
+            
+            if mf == False:
+                print('\nRIPTiDe completed in,', str(minutes), mins, 'and', str(int(seconds)), secs, '\n')
+            else:
+                print('\nMaxfit RIPTiDe completed in,', str(minutes), mins, 'and', str(int(seconds)), secs, '\n')
 
     return report_dict
 
