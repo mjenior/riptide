@@ -204,7 +204,7 @@ riptide_object_1_b = riptide.contextualize(model=my_model, transcriptome=transcr
 
 riptide_object_2_maxfit = riptide.maxfit_contextualize(model=my_model, transcriptome=transcript_abundances_2)
 
-riptide.save_output(riptide_obj=riptide_object_1_a, path='~/Desktop/riptide_output')
+riptide.save_output(riptide_obj=riptide_object_1_a, path='~/Desktop/example_riptide_output')
 ``` 
 
 ### Example riptide.contextualize() stdout report:
