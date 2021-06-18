@@ -78,6 +78,13 @@ def save_output(riptide_obj='NULL', path='NULL', file_type='SBML'):
         outFile = path + '/model.sbml'
         cobra.io.write_sbml_model(riptide_obj.model, outFile)
 
+    # Save transctiptome abundances
+    outFile = path + '/transctiptome.tsv'
+    with open(outFile, 'w') as transctiptome:
+    	transctiptome.write('gene\ttranscript_abund\n')
+        for gene in riptide_obj.transctiptome.keys():
+            transctiptome.write(gene + '\t' + str(riptide_obj.transctiptome[gene]) + '\n')
+
     # Write flux samples and FVA to a tsv
     if isinstance(riptide_obj.flux_samples, str) == False:
         outFile = path + '/flux_samples.tsv'
