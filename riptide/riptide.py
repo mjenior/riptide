@@ -80,10 +80,12 @@ def save_output(riptide_obj='NULL', path='NULL', file_type='SBML'):
     # Save transcriptome abundances
     outFile = path + '/transcriptome.tsv'
     with open(outFile, 'w') as transcription:
-        transcription.write('gene\ttranscript_abund\n')
         for gene in riptide_obj.transcriptome.keys():
-            abund = '\t'.join([str(x) for x in riptide_obj.transcriptome[gene]])
-            transcription.write(gene + '\t' + abund + '\n')
+            if gene == 'replicates':
+                continue
+            else:
+                abund = '\t'.join([str(x) for x in riptide_obj.transcriptome[gene]])
+                transcription.write(gene + '\t' + abund + '\n')
 
     # Write flux samples and FVA to a tsv
     if isinstance(riptide_obj.flux_samples, str) == False:
@@ -587,6 +589,10 @@ def contextualize(model, transcriptome = 'none', samples = 500, silent = False, 
         for gene in model.genes:
             transcriptome[gene.id] = 1.0
             transcriptome['replicates'] = 1
+    try:
+        test = transcriptome['replicates']
+    except KeyError:
+        transcriptome['replicates'] = len(transcriptome[list(transcriptome.keys())[0]])
 
     # Save parameters as part of the output object
     riptide_object.fraction_of_optimum = fraction
@@ -615,13 +621,13 @@ def contextualize(model, transcriptome = 'none', samples = 500, silent = False, 
     all_min_coefficient_dict = {}
     if silent == False: print('Pruning zero flux subnetworks...')
     for x in range(0, transcriptome['replicates']):
-        current_transcriptome = {}
-        for index in transcriptome.keys():
+        current_rxn_transcriptome = {}
+        for index in rxn_transcriptome.keys():
             if index == 'replicates':
                 continue
             else:
-                current_transcriptome[index] = transcriptome[index][x]
-        min_coefficient_dict, max_coefficient_dict, important_type = _assign_coefficients(current_transcriptome, riptide_model, exch_weight, important, direct)
+                current_rxn_transcriptome[index] = rxn_transcriptome[index][x]
+        min_coefficient_dict, max_coefficient_dict, important_type = _assign_coefficients(current_rxn_transcriptome, riptide_model, exch_weight, important, direct)
         for x in min_coefficient_dict.keys():
             try:
                 all_min_coefficient_dict[x].append(min_coefficient_dict[x])
@@ -642,13 +648,13 @@ def contextualize(model, transcriptome = 'none', samples = 500, silent = False, 
 
     # Find optimal solution space based on transcription and final constraints
     if silent == False: print('Analyzing context-specific flux distributions...')
-    median_transcriptome = {}
-    for x in transcriptome.keys(): 
+    median_rxn_transcriptome = {}
+    for x in rxn_transcriptome.keys(): 
         if x == 'replicates':
             continue
         else:
-            median_transcriptome[x] = numpy.median(transcriptome[x])
-    min_coefficient_dict, max_coefficient_dict, important_type = _assign_coefficients(median_transcriptome, riptide_model, exch_weight, important, direct)
+            median_rxn_transcriptome[x] = numpy.median(rxn_transcriptome[x])
+    min_coefficient_dict, max_coefficient_dict, important_type = _assign_coefficients(median_rxn_transcriptome, riptide_model, exch_weight, important, direct)
     flux_samples, fva_result, concordance = _constrain_and_analyze_model(model=riptide_model, coefficient_dict=max_coefficient_dict, fraction=fraction, 
         sampling_depth=samples, objective=objective, tasks=tasks, minimum_threshold=minimum_threshold, cpus=processes)
     riptide_object.maximization_coefficients = max_coefficient_dict
@@ -703,7 +709,7 @@ def _transcript_to_reactions(reps_transcription_dict, model, gpr, additive):
             total += 1.0
             try:
                 current_abund = float(current_transcription_dict[gene.id]) + 1.0 
-                current_rxns = list(model.genes.get_by_id(gene.id).reactions)
+                current_rxns = list(gene.reactions)
                 success += 1.0
                 for rxn in current_rxns:
                     try:
@@ -759,13 +765,13 @@ def _transcript_to_reactions(reps_transcription_dict, model, gpr, additive):
             # Coefficient if no gene is associated
             except KeyError:
                 rxn_transcript_dict[rxn.id].append(nogene_abund)
-
+    
     return rxn_transcript_dict, gene_hits
 
 
 # Converts a dictionary of transcript abundances to reaction linear coefficients
 def _assign_coefficients(rxn_transcript_dict, model, exch_weight, important, direct):
-
+    
     # Calculate coefficients
     all_abundances = list(rxn_transcript_dict.values())
     denom = max(all_abundances)

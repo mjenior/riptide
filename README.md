@@ -39,9 +39,6 @@ OPTIONAL
 header : boolean
     Defines if read abundance file has a header that needs to be ignored
     Default is no header
-replicates : boolean
-    Defines if read abundances contains replicates and medians require calculation
-    Default is no replicates (False)
 sep: string
     Defines what character separates entries on each line
     Defaults to tab (.tsv)
@@ -197,7 +194,7 @@ from riptide import *
 my_model = cobra.io.read_sbml_model('examples/genre.sbml')
 
 transcript_abundances_1 = riptide.read_transcription_file('examples/transcriptome1.tsv')
-transcript_abundances_2 = riptide.read_transcription_file('examples/transcriptome2.tsv', replicates=True)
+transcript_abundances_2 = riptide.read_transcription_file('examples/transcriptome2.tsv') # has replicates
 
 riptide_object_1_a = riptide.contextualize(model=my_model, transcriptome=transcript_abundances_1)
 riptide_object_1_b = riptide.contextualize(model=my_model, transcriptome=transcript_abundances_1, tasks=['rxn1'], exclude=['rxn2','rxn3'])
@@ -257,9 +254,9 @@ Max fit RIPTiDe tests all minimum objective flux fractions over the provided ran
 The resulting object is a container for the following data structures.
 
 - **model** - Contextualized genome-scale metabolic network reconstruction
-- **transcriptome** - Transcriptomic abundances provided by user
+- **transcriptome** - Transcriptomic replicate abundances provided by user
 - **percent_of_mapping** - Percent of genes in mapping file found in input GENRE
-- **minimization_coefficients** - Linear coefficients used during flux sum minimization
+- **minimization_coefficients** - Linear coefficients used during flux sum minimization (based on transcriptome replicates)
 - **maximization_coefficients** - Linear coefficients for each reaction based used during flux sampling
 - **pruned** - Dictionary containing the IDs of genes, reactions, and metabolites pruned by RIPTiDe
 - **flux_samples** - Flux samples from constrained model
