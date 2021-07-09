@@ -78,12 +78,12 @@ def save_output(riptide_obj='NULL', path='NULL', file_type='SBML'):
         outFile = path + '/model.sbml'
         cobra.io.write_sbml_model(riptide_obj.model, outFile)
 
-    # Save transctiptome abundances
-    outFile = path + '/transctiptome.tsv'
-    with open(outFile, 'w') as transctiptome:
-    	transctiptome.write('gene\ttranscript_abund\n')
-        for gene in riptide_obj.transctiptome.keys():
-            transctiptome.write(gene + '\t' + str(riptide_obj.transctiptome[gene]) + '\n')
+    # Save transcriptome abundances
+    outFile = path + '/transcriptome.tsv'
+    with open(outFile, 'w') as transcription:
+        transcription.write('gene\ttranscript_abund\n')
+        for gene in riptide_obj.transcriptome.keys():
+            transcription.write(gene + '\t' + str(riptide_obj.transcriptome[gene]) + '\n')
 
     # Write flux samples and FVA to a tsv
     if isinstance(riptide_obj.flux_samples, str) == False:
@@ -462,6 +462,7 @@ def maxfit_contextualize(model, transcriptome = 'none', frac_min = 0.35, frac_ma
 
     top_fit.fraction_bounds = [frac_min, frac_max]
     top_fit.fraction_step = frac_step
+    top_fit.transcriptome = transcriptome
 
     if silent == False:
         print('\nContext-specific metabolism fit with', top_fit.fraction_of_optimum, 'of optimal objective flux')
