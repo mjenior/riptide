@@ -503,11 +503,6 @@ def contextualize(model, transcriptome = 'none', samples = 500, silent = False, 
     exch_weight : bool
         Weight exchange reactions the same as adjacent transporters
         Default is True
-    processes : int
-        The number of parallel processes to run for FVA. Optional and if not passed,
-        will be set to the number of CPUs found. Necessary to change if
-        your trying to run paralell instance of RIPTiDe on the same machine
-        Default is none
     fraction : float
         Minimum percent of optimal objective value during FBA steps
         Default is 0.8
@@ -587,8 +582,11 @@ def contextualize(model, transcriptome = 'none', samples = 500, silent = False, 
             print('WARNING: No transcriptome provided. Analyzing most parsimonious state')
         transcriptome = {}
         for gene in model.genes:
-            transcriptome[gene.id] = 1.0
+            transcriptome[gene.id] = [1.0]
             transcriptome['replicates'] = 1
+    else:
+        for gene in transcriptome.keys():
+            transcriptome[gene] = list(transcriptome[gene])
     try:
         test = transcriptome['replicates']
     except KeyError:
@@ -636,7 +634,7 @@ def contextualize(model, transcriptome = 'none', samples = 500, silent = False, 
         
         # Determine active network sections based on coefficients
         active_rxns = _constrain_and_analyze_model(model=riptide_model, coefficient_dict=min_coefficient_dict, fraction=fraction, sampling_depth=0, 
-            objective=objective, tasks=tasks, minimum_threshold=minimum_threshold, cpus=processes)
+            objective=objective, tasks=tasks, minimum_threshold=minimum_threshold)
         keep_rxns = keep_rxns.union(active_rxns)
 
     # Determine inactive reactions and prune model
@@ -656,7 +654,7 @@ def contextualize(model, transcriptome = 'none', samples = 500, silent = False, 
             median_rxn_transcriptome[x] = numpy.median(rxn_transcriptome[x])
     min_coefficient_dict, max_coefficient_dict, important_type = _assign_coefficients(median_rxn_transcriptome, riptide_model, exch_weight, important, direct)
     flux_samples, fva_result, concordance = _constrain_and_analyze_model(model=riptide_model, coefficient_dict=max_coefficient_dict, fraction=fraction, 
-        sampling_depth=samples, objective=objective, tasks=tasks, minimum_threshold=minimum_threshold, cpus=processes)
+        sampling_depth=samples, objective=objective, tasks=tasks, minimum_threshold=minimum_threshold)
     riptide_object.maximization_coefficients = max_coefficient_dict
     riptide_object.flux_samples = flux_samples
     riptide_object.flux_variability = fva_result
@@ -878,7 +876,7 @@ def _integrate_important(model, important, coefficient_dict):
 
 
 # Determine those reactions that carry flux in a pFBA objective set to a threshold of maximum
-def _constrain_and_analyze_model(model, coefficient_dict, fraction, sampling_depth, objective, tasks, minimum_threshold, cpus):
+def _constrain_and_analyze_model(model, coefficient_dict, fraction, sampling_depth, objective, tasks, minimum_threshold):
     
     constrained_model = copy.deepcopy(model)
 
@@ -923,14 +921,14 @@ def _constrain_and_analyze_model(model, coefficient_dict, fraction, sampling_dep
         # Analyze flux ranges and calculate concordance
         if sampling_depth != 1:
             warnings.filterwarnings('ignore') # Handle possible infeasible warnings
-            flux_samples = _gapsplit(constrained_model, depth=sampling_depth, cpus=cpus)
+            flux_samples = _gapsplit(constrained_model, depth=sampling_depth)
             warnings.filterwarnings('default')
             concordance = _calc_concordance(flux_samples, coefficient_dict)
         else:
             flux_samples = 'Not performed'
             concordance = 'Not performed'
             
-        fva = flux_variability_analysis(constrained_model, fraction_of_optimum=fraction, processes=cpus)
+        fva = flux_variability_analysis(constrained_model, fraction_of_optimum=fraction)
 
         return flux_samples, fva, concordance
 
@@ -1120,8 +1118,8 @@ def _operation_report(start_time, model, riptide, concordance, silent, mf):
 # Keaty TC & Jensen PA (2019). gapsplit: Efficient random sampling for non-convex constraint-based models.
 # bioRxiv 652917; doi: https://doi.org/10.1101/652917 
 
-def _gapsplit(model, depth, cpus):
-    fva = flux_variability_analysis(model, model.reactions, fraction_of_optimum=0.001, processes=cpus)
+def _gapsplit(model, depth):
+    fva = flux_variability_analysis(model, model.reactions, fraction_of_optimum=0.001)
 
     # only split reactions with feasible range >= min_range
     idxs = (fva.maximum - fva.minimum >= 1e-5).to_numpy().nonzero()[0]
