@@ -88,11 +88,6 @@ silent  : bool
 exch_weight : bool
     Weight exchange reactions the same as adjacent transporters
     Default is True
-processes : int
-    The number of parallel processes to run for FVA. Optional and if not passed,
-    will be set to the number of CPUs found. Necessary to change if
-    your trying to run paralell instance of RIPTiDe on the same machine
-    Default is none
 fraction : float
     Minimum percent of optimal objective value during FBA steps
     Default is 0.8

@@ -331,7 +331,7 @@ def _rarefy(abunds, n):
 
 # Iteratively run RIPTiDe over a range of objective minimum fractions
 def maxfit_contextualize(model, transcriptome = 'none', frac_min = 0.35, frac_max = 0.95, frac_step = 0.05, first_max = False,
-    samples = 500, exch_weight = False, processes = None, minimum = None, conservative = False, objective = True, additive = False, 
+    samples = 500, exch_weight = False, minimum = None, conservative = False, objective = True, additive = False, 
     important = [], set_bounds = True, silent = False, tasks = [], exclude = [], gpr = False, threshold = 1e-6, open_exchanges = False):
 
     '''Iterative RIPTiDe for a range of minimum objective fluxes, returns model with best fit to transcriptome
@@ -407,7 +407,7 @@ def maxfit_contextualize(model, transcriptome = 'none', frac_min = 0.35, frac_ma
         iters += 1
 
         iter_riptide = contextualize(model, transcriptome, fraction=frac, silent=True, samples=samples, exch_weight=exch_weight, 
-            processes=processes, minimum=minimum, conservative=conservative, 
+            minimum=minimum, conservative=conservative, 
             objective=objective, additive=additive, important=important, set_bounds=set_bounds, tasks=tasks, exclude=exclude, 
             gpr=gpr, threshold=threshold, open_exchanges=open_exchanges)
 
@@ -436,7 +436,7 @@ def maxfit_contextualize(model, transcriptome = 'none', frac_min = 0.35, frac_ma
 
     lower_frac = round(frac - new_step, 3)
     iter_riptide = contextualize(model, transcriptome, fraction=lower_frac, silent=True, samples=samples, exch_weight=exch_weight, 
-                    processes=processes, minimum=minimum, conservative=conservative, 
+                    minimum=minimum, conservative=conservative, 
                     objective=objective, additive=additive, important=important, set_bounds=set_bounds, tasks=tasks, exclude=exclude,
                     gpr=gpr, threshold=threshold, open_exchanges=open_exchanges)
     curr_rho = iter_riptide.concordance['r']
@@ -448,7 +448,7 @@ def maxfit_contextualize(model, transcriptome = 'none', frac_min = 0.35, frac_ma
 
     upper_frac = round(frac + new_step, 3)
     iter_riptide = contextualize(model, transcriptome, fraction=upper_frac, silent=True, samples=samples, exch_weight=exch_weight, 
-                    processes=processes, minimum=minimum, conservative=conservative, 
+                    minimum=minimum, conservative=conservative, 
                     objective=objective, additive=additive, important=important, set_bounds=set_bounds, tasks=tasks, exclude=exclude,
                     gpr=gpr, threshold=threshold, open_exchanges=open_exchanges)
     curr_rho = iter_riptide.concordance['r']
@@ -473,9 +473,9 @@ def maxfit_contextualize(model, transcriptome = 'none', frac_min = 0.35, frac_ma
 
 
 # Create context-specific model based on transcript distribution
-def contextualize(model, transcriptome = 'none', samples = 500, silent = False, exch_weight = False, processes=None,
+def contextualize(model, transcriptome = 'none', samples = 500, silent = False, exch_weight = False, 
     fraction = 0.8, minimum = None, conservative = False, objective = True, additive = False, important = [], direct = False,
-    set_bounds = True, tasks = [], exclude = [], gpr = False, threshold = 1e-6, open_exchanges = False):
+    set_bounds = True, tasks = [], exclude = [], gpr = False, threshold = 1e-6, open_exchanges = False, skip_fva = False):
 
     '''Reaction Inclusion by Parsimony and Transcriptomic Distribution or RIPTiDe
     
@@ -540,6 +540,9 @@ def contextualize(model, transcriptome = 'none', samples = 500, silent = False, 
     open_exchanges : bool
         Sets all exchange reactions bounds to (-1000., 1000)
         Default is False
+    skip_fva : bool
+        Skip final flux variability analysis step
+        Default is False
     '''
 
     start_time = time.time()
@@ -581,16 +584,15 @@ def contextualize(model, transcriptome = 'none', samples = 500, silent = False, 
         if silent == False:
             print('WARNING: No transcriptome provided. Analyzing most parsimonious state')
         transcriptome = {}
-        for gene in model.genes:
-            transcriptome[gene.id] = [1.0]
-            transcriptome['replicates'] = 1
+        transcriptome['replicates'] = 1
+        for gene in model.genes: transcriptome[gene.id] = [1.0]
     else:
+        transcriptome['replicates'] = int(len(transcriptome[list(transcriptome.keys())[0]]))
         for gene in transcriptome.keys():
-            transcriptome[gene] = list(transcriptome[gene])
-    try:
-        test = transcriptome['replicates']
-    except KeyError:
-        transcriptome['replicates'] = len(transcriptome[list(transcriptome.keys())[0]])
+            if gene == 'replicates':
+                continue
+            else:
+                transcriptome[gene] = list(transcriptome[gene])
 
     # Save parameters as part of the output object
     riptide_object.fraction_of_optimum = fraction
@@ -634,7 +636,7 @@ def contextualize(model, transcriptome = 'none', samples = 500, silent = False, 
         
         # Determine active network sections based on coefficients
         active_rxns = _constrain_and_analyze_model(model=riptide_model, coefficient_dict=min_coefficient_dict, fraction=fraction, sampling_depth=0, 
-            objective=objective, tasks=tasks, minimum_threshold=minimum_threshold)
+            objective=objective, tasks=tasks, minimum_threshold=minimum_threshold, skip_fva=skip_fva)
         keep_rxns = keep_rxns.union(active_rxns)
 
     # Determine inactive reactions and prune model
@@ -654,14 +656,14 @@ def contextualize(model, transcriptome = 'none', samples = 500, silent = False, 
             median_rxn_transcriptome[x] = numpy.median(rxn_transcriptome[x])
     min_coefficient_dict, max_coefficient_dict, important_type = _assign_coefficients(median_rxn_transcriptome, riptide_model, exch_weight, important, direct)
     flux_samples, fva_result, concordance = _constrain_and_analyze_model(model=riptide_model, coefficient_dict=max_coefficient_dict, fraction=fraction, 
-        sampling_depth=samples, objective=objective, tasks=tasks, minimum_threshold=minimum_threshold)
+        sampling_depth=samples, objective=objective, tasks=tasks, minimum_threshold=minimum_threshold, skip_fva=skip_fva)
     riptide_object.maximization_coefficients = max_coefficient_dict
     riptide_object.flux_samples = flux_samples
     riptide_object.flux_variability = fva_result
     riptide_object.concordance = concordance
 
     # Assign new reaction bounds
-    if set_bounds == True: 
+    if set_bounds == True and skip_fva == False: 
         for rxn in riptide_model.reactions:
             current_fva = list(fva_result.loc[rxn.id])
             rxn.bounds = (min(current_fva), max(current_fva))
@@ -694,7 +696,10 @@ def _transcript_to_reactions(reps_transcription_dict, model, gpr, additive):
     total = 0.0
     success = 0.0
     fail = 0.0
-    for x in range(0, reps_transcription_dict['replicates']):
+
+    reps = reps_transcription_dict['replicates']
+    if type(reps) is list: reps = reps[0]
+    for x in range(0, reps):
         current_transcription_dict = {}
         for index in reps_transcription_dict.keys():
             if index == 'replicates':
@@ -876,7 +881,7 @@ def _integrate_important(model, important, coefficient_dict):
 
 
 # Determine those reactions that carry flux in a pFBA objective set to a threshold of maximum
-def _constrain_and_analyze_model(model, coefficient_dict, fraction, sampling_depth, objective, tasks, minimum_threshold):
+def _constrain_and_analyze_model(model, coefficient_dict, fraction, sampling_depth, objective, tasks, minimum_threshold, skip_fva):
     
     constrained_model = copy.deepcopy(model)
 
@@ -927,8 +932,11 @@ def _constrain_and_analyze_model(model, coefficient_dict, fraction, sampling_dep
         else:
             flux_samples = 'Not performed'
             concordance = 'Not performed'
-            
-        fva = flux_variability_analysis(constrained_model, fraction_of_optimum=fraction)
+        
+        if skip_fva == False:
+            fva = flux_variability_analysis(constrained_model, fraction_of_optimum=fraction)
+        else:
+            fva = 'Not performed'
 
         return flux_samples, fva, concordance
 
