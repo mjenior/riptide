@@ -587,6 +587,13 @@ def contextualize(model, transcriptome = 'none', samples = 500, silent = False, 
         transcriptome['replicates'] = 1
         for gene in model.genes: transcriptome[gene.id] = [1.0]
     else:
+        # Make sure transcriptome entries are lists
+        for x in transcriptome.keys():
+            if isinstance(transcriptome[x], list):
+                continue
+            else:
+                transcriptome[x] = [transcriptome[x]]
+
         transcriptome['replicates'] = int(len(transcriptome[list(transcriptome.keys())[0]]))
         for gene in transcriptome.keys():
             if gene == 'replicates':

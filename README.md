@@ -129,6 +129,9 @@ defined : False or list
 open_exchanges : bool
     Sets all exchange reactions bounds to (-1000., 1000)
     Default is False
+skip_fva : bool
+    Skips final flux variability analysis
+    Default is False
 ```
 
 **riptide.save_output() - Writes RIPTiDe results to files in a new directory**
