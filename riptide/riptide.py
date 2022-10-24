@@ -330,6 +330,7 @@ def _rarefy(abunds, n):
     return list(result)
 
 
+# Version of riptide.contextualize compatible with multiprocessing loop
 def _iter_riptide(frac, argDict):
     iter = contextualize(model=argDict['model'], transcriptome=argDict['transcriptome'], fraction=frac, 
                          silent=argDict['silent'], samples=argDict['samples'], exch_weight=argDict['exch_weight'], 
@@ -341,15 +342,19 @@ def _iter_riptide(frac, argDict):
     return iter
 
 
+# Finds the best Rho value from a list of riptide objects
 def _find_best_fit(maxfit_list, top_rho = 0.0):
 
-    for iter in maxfit_list:
-        if iter.concordance['r'] > top_rho:
-            top_fit = copy.deepcopy(iter)
-            top_rho = iter.concordance['r']
+    for iter in range(0, len(maxfit_list)):
+        curr = maxfit_list[iter].concordance['r']
+        if curr > top_rho:
+            top_fit_index = iter
+            top_rho = curr
 
     if top_rho == 0.0:
         top_fit = copy.deepcopy(maxfit_list[0])
+    else:
+        top_fit = copy.deepcopy(maxfit_list[top_fit_index])
 
     return top_fit
 
