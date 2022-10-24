@@ -10,6 +10,7 @@ import pandas
 import warnings
 import symengine
 import itertools
+import multiprocessing
 from cobra.util import solver
 from scipy.stats import spearmanr
 from numpy.random import permutation
@@ -38,7 +39,7 @@ class riptideClass:
 
 
 # Save the output of RIPTiDe in a newly created directory
-def save_output(riptide_obj='NULL', path='NULL', file_type='SBML'):
+def save_output(riptide_obj='NULL', path='NULL', file_type='JSON'):
     '''Writes RIPTiDe results to files in a new directory
     
     Parameters
@@ -54,7 +55,7 @@ def save_output(riptide_obj='NULL', path='NULL', file_type='SBML'):
     file_type : str
         Type of output file for RIPTiDe model
         Accepts either sbml or json
-        Default is SBML
+        Default is JSON
     '''
 
     if riptide_obj == 'NULL':
@@ -329,9 +330,33 @@ def _rarefy(abunds, n):
     return list(result)
 
 
+def _iter_riptide(frac, argDict):
+    iter = contextualize(model=argDict['model'], transcriptome=argDict['transcriptome'], fraction=frac, 
+                         silent=argDict['silent'], samples=argDict['samples'], exch_weight=argDict['exch_weight'], 
+                         minimum=argDict['minimum'], conservative=argDict['conservative'], objective=argDict['objective'], 
+                         additive=argDict['additive'], important=argDict['important'], set_bounds=argDict['set_bounds'], 
+                         tasks=argDict['tasks'], exclude=argDict['exclude'], gpr=argDict['gpr'], threshold=argDict['threshold'], 
+                         open_exchanges=argDict['open_exchanges'])
+
+    return iter
+
+
+def _find_best_fit(maxfit_list, top_rho = 0.0):
+
+    for iter in maxfit_list:
+        if iter.concordance['r'] > top_rho:
+            top_fit = copy.deepcopy(iter)
+            top_rho = iter.concordance['r']
+
+    if top_rho == 0.0:
+        top_fit = copy.deepcopy(maxfit_list[0])
+
+    return top_fit
+
+
 # Iteratively run RIPTiDe over a range of objective minimum fractions
 def maxfit_contextualize(model, transcriptome = 'none', frac_min = 0.35, frac_max = 0.95, frac_step = 0.05, first_max = False,
-    samples = 500, exch_weight = False, minimum = None, conservative = False, objective = True, additive = False, 
+    samples = 500, cpus = 'all', exch_weight = False, minimum = None, conservative = False, objective = True, additive = False, 
     important = [], set_bounds = True, silent = False, tasks = [], exclude = [], gpr = False, threshold = 1e-6, open_exchanges = False):
 
     '''Iterative RIPTiDe for a range of minimum objective fluxes, returns model with best fit to transcriptome
@@ -346,6 +371,9 @@ def maxfit_contextualize(model, transcriptome = 'none', frac_min = 0.35, frac_ma
         Dictionary of transcript abundances, output of read_transcription_file()
     
     OPTIONAL
+    cpus  : int
+        CPUs number for parallelization
+        Default is all available 
     frac_min : float
         Lower bound for range of minimal fractions to test
         Default is 0.65
@@ -370,6 +398,12 @@ def maxfit_contextualize(model, transcriptome = 'none', frac_min = 0.35, frac_ma
     if transcriptome == 'none':
         raise ValueError('ERROR: Iterative RIPTiDe requires an input transcriptome')
 
+
+    if cpus == 'all':
+        cpus = multiprocessing.cpu_count()
+    elif isinstance(cpus, int) == False:
+        raise ValueError('ERROR: Invalid number of threads provided')
+
     if frac_min < 0. or frac_min > 1.:
         print('WARNING: Improper minimum fraction provided, setting to default value')
         frac_min = 0.65
@@ -388,8 +422,8 @@ def maxfit_contextualize(model, transcriptome = 'none', frac_min = 0.35, frac_ma
         print('WARNING: Improper fraction step provided, setting to default value')
         frac_max = 0.02
     
-    frac_range = [round(x, 3) for x in list(numpy.arange(frac_min, frac_max, frac_step))]
-    if len(frac_range) == 1:
+    big_frac_range = [round(x, 3) for x in list(numpy.arange(frac_min, frac_max, frac_step))]
+    if len(big_frac_range) == 1:
         print('WARNING: Only a single fraction is possible in the input bounds and fraction')
 
     frac_min = round(frac_min, 3)
@@ -397,67 +431,30 @@ def maxfit_contextualize(model, transcriptome = 'none', frac_min = 0.35, frac_ma
     frac_step = round(frac_step, 3)
 
     if silent == False:
-        print('\nRunning max fit RIPTiDe for objective fraction range:', frac_min, 'to', frac_max, 'with intervals of', frac_step, '\n')
+        print('\nRunning max fit RIPTiDe for objective fraction range:', frac_min, 'to', frac_max, 'with intervals of', frac_step, '...\n')
 
-    top_rho = 0.
-    iters = 0
-    if silent == False:
-        print('Testing minimum objective fractions...')
-    for frac in frac_range:
-        iters += 1
+    argDict = {'model':model, 'transcriptome':transcriptome, 'silent':True, 
+               'samples':samples, 'exch_weight':exch_weight, 'minimum':minimum, 
+               'conservative':conservative, 'objective':objective, 'additive':additive, 
+               'important':important, 'set_bounds':set_bounds, 'tasks':tasks, 'exclude':exclude, 
+               'gpr':gpr, 'threshold':threshold, 'open_exchanges':open_exchanges}
 
-        iter_riptide = contextualize(model, transcriptome, fraction=frac, silent=True, samples=samples, exch_weight=exch_weight, 
-            minimum=minimum, conservative=conservative, 
-            objective=objective, additive=additive, important=important, set_bounds=set_bounds, tasks=tasks, exclude=exclude, 
-            gpr=gpr, threshold=threshold, open_exchanges=open_exchanges)
+    cpu_pool = multiprocessing.Pool(cpus)
+    maxfit_results1 = [cpu_pool.apply(_iter_riptide, args=(frac, argDict)) for frac in big_frac_range]
+    cpu_pool.close()
 
-        curr_rho = iter_riptide.concordance['r']
-        curr_p = iter_riptide.concordance['p']
-        if iters == 1:
-            top_fit = copy.deepcopy(iter_riptide)
-            top_rho = curr_rho
-
-        if silent == False:
-            print('Fraction =', frac, '| Rho =', round(curr_rho,4), '; p =', round(curr_p,4))
-        
-        if curr_rho >= top_rho:
-            top_fit = copy.deepcopy(iter_riptide)
-            top_rho = curr_rho
-        elif first_max == True:
-            if curr_rho < top_rho:
-                if silent == False:
-                    print('High correlation found, exiting search...')
-                break
-    
     if silent == False:
         print('Testing local objective fractions to ' + str(top_fit.fraction_of_optimum) + '...')
+
     new_step = round(frac_step / 2.0, 3)
-    frac = round(top_fit.fraction_of_optimum, 3)
+    top_frac = round(top_fit.fraction_of_optimum, 3)
+    small_frac_range = [round(top_frac - new_step, 3), round(top_frac + new_step, 3)]
+    cpu_pool = multiprocessing.Pool(cpus)
+    maxfit_results2 = [cpu_pool.apply(_iter_riptide, args=(frac, argDict)) for frac in small_frac_range]
+    cpu_pool.close()
 
-    lower_frac = round(frac - new_step, 3)
-    iter_riptide = contextualize(model, transcriptome, fraction=lower_frac, silent=True, samples=samples, exch_weight=exch_weight, 
-                    minimum=minimum, conservative=conservative, 
-                    objective=objective, additive=additive, important=important, set_bounds=set_bounds, tasks=tasks, exclude=exclude,
-                    gpr=gpr, threshold=threshold, open_exchanges=open_exchanges)
-    curr_rho = iter_riptide.concordance['r']
-    curr_p = iter_riptide.concordance['p']
-    if silent == False:
-        print('Fraction =', lower_frac, '| Rho =', round(curr_rho,4), '; p =', round(curr_p,4))
-    if curr_rho >= top_rho:
-        top_fit = copy.deepcopy(iter_riptide)
-
-    upper_frac = round(frac + new_step, 3)
-    iter_riptide = contextualize(model, transcriptome, fraction=upper_frac, silent=True, samples=samples, exch_weight=exch_weight, 
-                    minimum=minimum, conservative=conservative, 
-                    objective=objective, additive=additive, important=important, set_bounds=set_bounds, tasks=tasks, exclude=exclude,
-                    gpr=gpr, threshold=threshold, open_exchanges=open_exchanges)
-    curr_rho = iter_riptide.concordance['r']
-    curr_p = iter_riptide.concordance['p']
-    if silent == False:
-        print('Fraction =', upper_frac, '| Rho =', round(curr_rho,4), '; p =', round(curr_p,4))
-    if curr_rho >= top_rho:
-        top_fit = copy.deepcopy(iter_riptide)
-
+    maxfit_results = maxfit_results1 + maxfit_results2
+    top_fit = _find_best_fit(maxfit_results)
     top_fit.fraction_bounds = [frac_min, frac_max]
     top_fit.fraction_step = frac_step
     top_fit.transcriptome = transcriptome

@@ -146,7 +146,7 @@ path : str
 file_type : str
     Type of output file for RIPTiDe model
     Accepts either sbml or json
-    Default is SBML
+    Default is JSON
 ```
 
 **riptide.maxfit_contextualize() - Iterative RIPTiDe for a range of minimum objective fluxes, returns model with best fit to transcriptome**
@@ -158,6 +158,9 @@ transcriptome : dictionary
     Dictionary of transcript abundances, output of read_transcription_file()
 
 OPTIONAL
+cpus  : int
+        CPUs number for parallelization
+        Default is all available 
 frac_min : float
     Lower bound for range of minimal fractions to test
     Default is 0.65
