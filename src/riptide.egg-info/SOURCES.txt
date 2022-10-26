@@ -1,0 +1,10 @@
+LICENSE.txt
+MANIFEST.in
+README.md
+pyproject.toml
+src/__init__.py
+src/riptide.py
+src/riptide.egg-info/PKG-INFO
+src/riptide.egg-info/SOURCES.txt
+src/riptide.egg-info/dependency_links.txt
+src/riptide.egg-info/top_level.txt
