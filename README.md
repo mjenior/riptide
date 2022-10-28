@@ -150,34 +150,6 @@ file_type : str
     Default is JSON
 ```
 
-**riptide.maxfit() - Iterative RIPTiDe for a range of minimum objective fluxes, returns model with best fit to transcriptome**
-```
-REQUIRED
-model : cobra.Model
-    The model to be contextualized
-transcriptome : dictionary
-    Dictionary of transcript abundances, output of read_transcription_file()
-
-OPTIONAL
-cpus  : int
-        CPUs number for parallelization
-        Default is all available 
-frac_min : float
-    Lower bound for range of minimal fractions to test
-    Default is 0.65
-frac_max : float
-    Upper bound for range of minimal fractions to test
-    Default is 0.85
-first_max : bool
-    Exits early if next subsequent iteration has a worse correlation
-    Default is False
-
-ADDITIONAL
-    All other optional parameters for riptide.contextualize()
-'''
-```
-
-
 ## Usage
 
 **Comments before starting:** 
