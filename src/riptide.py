@@ -49,7 +49,7 @@ def save_output(riptide_obj='NULL', path='NULL', file_type='JSON'):
 
     REQUIRED
     riptide_obj : RIPTiDe object
-        Class object creared by riptide.contextualize()
+        Class object created by riptide.contextualize()
 
     OPTIONAL
     path : str
@@ -343,7 +343,7 @@ def _rarefy(abunds, n):
 # Version of riptide.contextualize compatible with multiprocessing
 def _iter_riptide(frac, argDict):
     
-    iter = contextualize(model=argDict['model'], transcriptome=argDict['transcriptome'], fraction=frac, 
+    iter = _single(model=argDict['model'], transcriptome=argDict['transcriptome'], fraction=frac, 
                          silent=argDict['silent'], samples=argDict['samples'], exch_weight=argDict['exch_weight'], 
                          minimum=argDict['minimum'], conservative=argDict['conservative'], objective=argDict['objective'], 
                          additive=argDict['additive'], important=argDict['important'], set_bounds=argDict['set_bounds'], 
@@ -385,7 +385,7 @@ def _find_best_fit(frac_range, argDict):
 
 
 # Iteratively run RIPTiDe over a range of objective minimum fractions
-def maxfit(model, transcriptome = 'none', frac_min = 0.25, frac_max = 0.85, 
+def contextualize(model, transcriptome = 'none', frac_min = 0.25, frac_max = 0.85, 
     samples = 500, cpus = 'all', exch_weight = False, minimum = None, conservative = False, objective = True, additive = False, 
     important = [], set_bounds = True, silent = False, tasks = [], exclude = [], gpr = False, threshold = 1e-6, open_exchanges = False):
 
@@ -413,12 +413,61 @@ def maxfit(model, transcriptome = 'none', frac_min = 0.25, frac_max = 0.85,
     first_max : bool
         Exits early if next subsequent iteration has a worse correlation
         Default is False
-
-    ADDITIONAL
-    All other optional parameters for riptide.contextualize()
+    samples : int 
+        Number of flux samples to collect
+        Default is 500
+    silent  : bool
+        Silences std out 
+        Default is False
+    exch_weight : bool
+        Weight exchange reactions the same as adjacent transporters
+        Default is True
+    fraction : float
+        Minimum percent of optimal objective value during FBA steps
+        Default is 0.8
+    minimum : float
+        Minimum linear coefficient allowed during weight calculation for pFBA
+        Default is None
+    conservative : bool
+        Conservatively remove inactive reactions based on GPR rules (all member reactions must be inactive to prune)
+        Default is False
+    objective : bool
+        Sets previous objective function as a constraint with minimum flux equal to user input fraction
+        Default is True
+    additive : bool
+        Pool transcription abundances for reactions with multiple contributing gene products
+        Default is False
+    important : list
+        List of gene or reaction ID strings for which the highest weights are assigned regardless of transcription
+        Default is False
+    direct : bool
+        Assigns both minimization and maximization step coefficents directly, instead of relying on abundance distribution
+        Default is False
+    set_bounds : bool
+        Uses flux variability analysis results from constrained model to set new bounds for all reactions
+        Default is True
+    tasks : list
+        List of gene or reaction ID strings for forced inclusion in final model (metabolic tasks or essential genes)
+    exclude : list
+        List of reaction ID strings for forced exclusion from final model
+    gpr : bool
+        Determines if GPR rules will be considered during coefficient assignment
+        Default is False
+    threshold : float
+        Minimum flux a reaction must acheive in order to avoid pruning during flux sum minimization step
+        Default is 1e-6
+    open_exchanges : bool
+        Sets all exchange reactions bounds to (-1000., 1000)
+        Default is False
+    skip_fva : bool
+        Skip final flux variability analysis step
+        Default is False
     '''
 
     iter_start = time.time()
+    print('\nInitializing model and integrating transcriptomic data...')
+    print('Pruning zero flux subnetworks...')
+    print('Analyzing context-specific flux distributions...\n')
     seed(937162211)
 
     if samples <= 100:
@@ -491,7 +540,7 @@ def maxfit(model, transcriptome = 'none', frac_min = 0.25, frac_max = 0.85,
 
 
 # Create context-specific model based on transcript distribution
-def contextualize(model, transcriptome = 'none', samples = 500, silent = False, exch_weight = False, 
+def _single(model, transcriptome = 'none', samples = 500, silent = False, exch_weight = False, 
     fraction = 0.8, minimum = None, conservative = False, objective = True, additive = False, important = [], direct = False,
     set_bounds = True, tasks = [], exclude = [], gpr = False, threshold = 1e-6, open_exchanges = False, skip_fva = False):
 
@@ -512,58 +561,10 @@ def contextualize(model, transcriptome = 'none', samples = 500, silent = False, 
     transcriptome : dictionary
         Dictionary of transcript abundances, output of read_transcription_file()
         With default, an artifical transcriptome is generated where all abundances equal 1.0
-    samples : int 
-        Number of flux samples to collect
-        Default is 500
-    silent  : bool
-        Silences std out 
-        Default is False
-    exch_weight : bool
-        Weight exchange reactions the same as adjacent transporters
-        Default is True
-    fraction : float
-        Minimum percent of optimal objective value during FBA steps
-        Default is 0.8
-    minimum : float
-        Minimum linear coefficient allowed during weight calculation for pFBA
-        Default is None
-    conservative : bool
-        Conservatively remove inactive reactions based on GPR rules (all member reactions must be inactive to prune)
-        Default is False
-    objective : bool
-        Sets previous objective function as a constraint with minimum flux equal to user input fraction
-        Default is True
-    additive : bool
-        Pool transcription abundances for reactions with multiple contributing gene products
-        Default is False
-    important : list
-        List of gene or reaction ID strings for which the highest weights are assigned regardless of transcription
-        Default is False
-    direct : bool
-        Assigns both minimization and maximization step coefficents directly, instead of relying on abundance distribution
-        Default is False
-    set_bounds : bool
-        Uses flux variability analysis results from constrained model to set new bounds for all reactions
-        Default is True
-    tasks : list
-        List of gene or reaction ID strings for forced inclusion in final model (metabolic tasks or essential genes)
-    exclude : list
-        List of reaction ID strings for forced exclusion from final model
-    gpr : bool
-        Determines if GPR rules will be considered during coefficient assignment
-        Default is False
-    threshold : float
-        Minimum flux a reaction must acheive in order to avoid pruning during flux sum minimization step
-        Default is 1e-6
-    open_exchanges : bool
-        Sets all exchange reactions bounds to (-1000., 1000)
-        Default is False
-    skip_fva : bool
-        Skip final flux variability analysis step
-        Default is False
     '''
 
     start_time = time.time()
+    print('WARNING: This function is deprecated as of 3.4.1')
     seed(937162211)
 
     riptide_object = riptideClass()

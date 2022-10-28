@@ -2,6 +2,7 @@
 
 **R**eaction **I**nclusion by **P**arsimony and **T**ranscript **D**istribution
 
+v3.4.1
 ----
 
 Transcriptomic analyses of bacteria have become instrumental to our understanding of their responses to changes in their environment. While traditional analyses have been informative, leveraging these datasets within genome-scale metabolic network reconstructions (GENREs) can provide greatly improved context for shifts in pathway utilization and downstream/upstream ramifications for changes in metabolic regulation. Many previous techniques for GENRE transcript integration have focused on creating maximum consensus with input datasets, but these approaches have been shown to generate less accurate metabolic predictions than a transcript-agnostic method of flux minimization (pFBA), which identifies the most efficient/economic patterns of metabolism given certain growth constraints. Despite this success, growth conditions are not always easily quantifiable and highlights the need for novel platforms that build from these findings. This method, known as RIPTiDe, combines these concepts and utilizes overall minimization of flux weighted by transcriptomic analysis to identify the most energy efficient pathways to achieve growth that include more highly transcribed enzymes, without previous insight into extracellular conditions. This platform could be important for revealing context-specific bacterial phenotypes in line with governing principles of adaptive evolution, that drive disease manifestation or interactions between microbes.
@@ -197,8 +198,6 @@ transcript_abundances_2 = riptide.read_transcription_file('tests/transcriptome2.
 riptide_object_1_a = riptide.contextualize(model=my_model, transcriptome=transcript_abundances_1)
 riptide_object_1_b = riptide.contextualize(model=my_model, transcriptome=transcript_abundances_1, tasks=['rxn1'], exclude=['rxn2','rxn3'])
 
-riptide_object_2_maxfit = riptide.maxfit(model=my_model, transcriptome=transcript_abundances_2)
-
 riptide.save_output(riptide_obj=riptide_object_1_a, path='~/Desktop/example_riptide_output')
 ``` 
 
@@ -208,20 +207,6 @@ riptide.save_output(riptide_obj=riptide_object_1_a, path='~/Desktop/example_ript
 Initializing model and integrating transcriptomic data...
 Pruning zero flux subnetworks...
 Analyzing context-specific flux distributions...
-
-Reactions pruned to 285 from 1129 (74.76% change)
-Metabolites pruned to 285 from 1132 (74.82% change)
-Flux through the objective DECREASED to ~54.71 from ~65.43 (16.38% change)
-Context-specific metabolism correlates with transcriptome (r=0.149, p=0.011 *)
-
-RIPTiDe completed in 17 seconds
-
-```
-
-In the final step, RIPTiDe assesses the fit of transcriptomic data for the calculated network activity through correlation of transcript abundance and median flux value for each corresponding reaction. The Spearman correlation coefficient and associated p-value are the reported following the fraction of network topology that is pruned during the flux minimization step.
-
-### Example riptide.maxfit() stdout report:
-```
 
 Running max fit RIPTiDe for objective fraction range: 0.65 to 0.85
 Progress: 100%
@@ -239,6 +224,8 @@ Context-specific metabolism correlates with transcriptome (r=0.149, p=0.011 *)
 Max fit RIPTiDe completed in, 4 minutes and 33 seconds  
 
 ```
+
+In the final step, RIPTiDe assesses the fit of transcriptomic data for the calculated network activity through correlation of transcript abundance and median flux value for each corresponding reaction. The Spearman correlation coefficient and associated p-value are the reported following the fraction of network topology that is pruned during the flux minimization step.
 
 Max fit RIPTiDe tests all minimum objective flux fractions over the provided range and returns only the model with the best Spearman correlation between context-specific flux for reactions and the associated transcriptomic values. Note, terminating search if a subsequent iteration has a lower correlation coefficient than the last could result from a local maxima and must be considered if an exhaustive analysis is preferred.
 
@@ -260,11 +247,8 @@ The resulting object is a container for the following data structures.
 - **defined_coefficients** - Range of linear coefficients RIPTiDe is allowed to utilize provided as a list
 - **included_important** - Reactions or Genes included in the final model which the user defined as important
 - **additional_parameters** - Dictionary of additional parameters RIPTiDe uses
-
-### Additional maxfit-only RIPTiDe object (class) properties:
-
 - **fraction_bounds** - Minimum and maximum values for the range of objective flux minimum fractions tested
-- **fraction_step** - Increment for series of objective flux minima created within fraction bound range
+- **maxfit_iters** - Objective flux and fit to transcriptome for each minimum flux fraction tested
 
 **Examples of accessing components of RIPTiDe output:**
 ```python
