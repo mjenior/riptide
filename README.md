@@ -160,7 +160,7 @@ file_type : str
 - The resulting RIPTiDe object has multiple properties including the context-specific model and flux analyses, accessing each is described below
 
 ```python
-from riptide import *
+import riptide
 
 my_model = cobra.io.read_sbml_model('tests/genre.sbml')
 
