@@ -142,10 +142,6 @@ def save_output(riptide_obj='NULL', path='NULL', file_type='JSON'):
             parameters.write('Differential weighting by GPR: Yes\n')
         else:
             parameters.write('Differential weighting by GPR: No\n')
-        if riptide_obj.additional_parameters['exch_weight'] == True:
-            parameters.write('Exchanges weighted as adjacent transporters: Yes\n')
-        else:
-            parameters.write('Exchanges weighted as adjacent transporters: No\n')
         if riptide_obj.additional_parameters['set_bounds'] == True:
             parameters.write('Set reaction bounds based on FVA results: Yes\n')
         else:
@@ -344,7 +340,7 @@ def _rarefy(abunds, n):
 def _iter_riptide(frac, argDict):
     
     iter = single_contextualize(model=argDict['model'], transcriptome=argDict['transcriptome'], fraction=frac, 
-                         silent=True, samples=argDict['samples'], exch_weight=argDict['exch_weight'], 
+                         silent=True, samples=argDict['samples'], 
                          minimum=argDict['minimum'], conservative=argDict['conservative'], objective=argDict['objective'], 
                          additive=argDict['additive'], important=argDict['important'], set_bounds=argDict['set_bounds'], 
                          tasks=argDict['tasks'], exclude=argDict['exclude'], gpr=argDict['gpr'], threshold=argDict['threshold'], 
@@ -386,7 +382,7 @@ def _find_best_fit(frac_range, argDict):
 
 # Iteratively run RIPTiDe over a range of objective minimum fractions
 def contextualize(model, transcriptome = 'none', frac_min = 0.25, frac_max = 0.85, 
-    samples = 500, cpus = 'all', exch_weight = False, minimum = None, conservative = False, objective = True, additive = False, 
+    samples = 500, cpus = 'all', minimum = None, conservative = False, objective = True, additive = False, 
     important = [], set_bounds = True, silent = False, tasks = [], exclude = [], gpr = False, threshold = 1e-6, open_exchanges = False):
 
     '''Iterative RIPTiDe for a range of minimum objective fluxes, returns model with best fit to transcriptome
@@ -416,9 +412,6 @@ def contextualize(model, transcriptome = 'none', frac_min = 0.25, frac_max = 0.8
     silent  : bool
         Silences std out 
         Default is False
-    exch_weight : bool
-        Weight exchange reactions the same as adjacent transporters
-        Default is True
     minimum : float
         Minimum linear coefficient allowed during weight calculation for pFBA
         Default is False
@@ -496,7 +489,7 @@ def contextualize(model, transcriptome = 'none', frac_min = 0.25, frac_max = 0.8
         print('\nRunning max fit RIPTiDe for objective fraction range:', frac_min, 'to', frac_max, '...')
 
     argDict = {'model':model, 'transcriptome':transcriptome, 'silent':True, 'cpus':cpus,
-               'samples':samples, 'exch_weight':exch_weight, 'minimum':minimum, 
+               'samples':samples, 'minimum':minimum, 
                'conservative':conservative, 'objective':objective, 'additive':additive, 
                'important':important, 'set_bounds':set_bounds, 'tasks':tasks, 'exclude':exclude, 
                'gpr':gpr, 'threshold':threshold, 'open_exchanges':open_exchanges}
@@ -534,7 +527,7 @@ def contextualize(model, transcriptome = 'none', frac_min = 0.25, frac_max = 0.8
 
 
 # Create context-specific model based on transcript distribution
-def single_contextualize(model, transcriptome = 'none', samples = 500, silent = False, exch_weight = False, 
+def single_contextualize(model, transcriptome = 'none', samples = 500, silent = False, 
     fraction = 0.8, minimum = None, conservative = False, objective = True, additive = False, important = [], direct = False,
     set_bounds = True, tasks = [], exclude = [], gpr = False, threshold = 1e-6, open_exchanges = False, skip_fva = False):
 
@@ -569,7 +562,6 @@ def single_contextualize(model, transcriptome = 'none', samples = 500, silent = 
     riptide_object.additional_parameters = {}
     riptide_object.additional_parameters['threshold'] = threshold
     riptide_object.additional_parameters['silent'] = silent
-    riptide_object.additional_parameters['exch_weight'] = exch_weight
     riptide_object.additional_parameters['conservative'] = conservative
     riptide_object.additional_parameters['objective'] = objective
     riptide_object.additional_parameters['additive'] = additive
@@ -655,7 +647,7 @@ def single_contextualize(model, transcriptome = 'none', samples = 500, silent = 
                 continue
             else:
                 current_rxn_transcriptome[index] = rxn_transcriptome[index][x]
-        min_coefficient_dict, max_coefficient_dict, important_type = _assign_coefficients(current_rxn_transcriptome, riptide_model, exch_weight, important, direct)
+        min_coefficient_dict, max_coefficient_dict, important_type = _assign_coefficients(current_rxn_transcriptome, riptide_model, important, direct)
         for x in min_coefficient_dict.keys():
             try:
                 all_min_coefficient_dict[x].append(min_coefficient_dict[x])
@@ -682,7 +674,7 @@ def single_contextualize(model, transcriptome = 'none', samples = 500, silent = 
             continue
         else:
             median_rxn_transcriptome[x] = numpy.median(rxn_transcriptome[x])
-    min_coefficient_dict, max_coefficient_dict, important_type = _assign_coefficients(median_rxn_transcriptome, riptide_model, exch_weight, important, direct)
+    min_coefficient_dict, max_coefficient_dict, important_type = _assign_coefficients(median_rxn_transcriptome, riptide_model, important, direct)
     flux_samples, fva_result, concordance = _constrain_and_analyze_model(model=riptide_model, coefficient_dict=max_coefficient_dict, fraction=fraction, 
         sampling_depth=samples, objective=objective, tasks=tasks, minimum_threshold=minimum_threshold, skip_fva=skip_fva)
     riptide_object.maximization_coefficients = max_coefficient_dict
@@ -800,8 +792,9 @@ def _transcript_to_reactions(reps_transcription_dict, model, gpr, additive):
     return rxn_transcript_dict, gene_hits
 
 
+
 # Converts a dictionary of transcript abundances to reaction linear coefficients
-def _assign_coefficients(rxn_transcript_dict, model, exch_weight, important, direct):
+def _assign_coefficients(rxn_transcript_dict, model, important, direct):
     
     # Calculate coefficients
     all_abundances = list(rxn_transcript_dict.values())
@@ -823,12 +816,6 @@ def _assign_coefficients(rxn_transcript_dict, model, exch_weight, important, dir
     for rxn in rxn_transcript_dict.keys():
         rxn_min_coefficient_dict[rxn] = coefficient_dict[rxn_transcript_dict[rxn]][0]
         rxn_max_coefficient_dict[rxn] = coefficient_dict[rxn_transcript_dict[rxn]][1]
-
-    # Set adjacent exchange reactions to the same coefficients
-    if exch_weight == True:
-        for rxn in exchanges.keys():
-            rxn_max_coefficient_dict[exchanges[rxn]] = rxn_max_coefficient_dict[rxn]
-            rxn_min_coefficient_dict[exchanges[rxn]] = rxn_min_coefficient_dict[rxn]
 
     # If user has defined important genes/reactions, integrate new weights here
     important_type = 'NULL'
