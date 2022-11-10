@@ -344,7 +344,7 @@ def _rarefy(abunds, n):
 def _iter_riptide(frac, argDict):
     
     iter = single_contextualize(model=argDict['model'], transcriptome=argDict['transcriptome'], fraction=frac, 
-                         silent=argDict['silent'], samples=argDict['samples'], exch_weight=argDict['exch_weight'], 
+                         silent=True, samples=argDict['samples'], exch_weight=argDict['exch_weight'], 
                          minimum=argDict['minimum'], conservative=argDict['conservative'], objective=argDict['objective'], 
                          additive=argDict['additive'], important=argDict['important'], set_bounds=argDict['set_bounds'], 
                          tasks=argDict['tasks'], exclude=argDict['exclude'], gpr=argDict['gpr'], threshold=argDict['threshold'], 
