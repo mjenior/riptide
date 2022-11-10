@@ -255,6 +255,7 @@ context_specific_flux_samples = riptide_object.flux_samples
 
 Thank you for your interest in RIPTiDe!
 
+
 If you encounter any problems, please [file an issue](https://github.com/mjenior/riptide/issues) along with a detailed description.
 
 Distributed under the terms of the [MIT](http://opensource.org/licenses/MIT) license, "riptide" is free and open source software
