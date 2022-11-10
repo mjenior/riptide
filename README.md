@@ -9,7 +9,7 @@ Transcriptomic analyses of bacteria have become instrumental to our understandin
 
 Please cite when using:
 ```
-Jenior ML, Moutinho Jr TJ, Dougherty BV, & Papin JA. (2020). Transcriptome-guided parsimonious flux analysis improves predictions with metabolic networks in complex environments. PLOS Comp Biol. 
+Jenior ML, Moutinho Jr TJ, Dougherty BV, & Papin JA. (2020). Transcriptome-guided parsimonious flux analysis improves predictions with metabolic networks in complex environments. PLOS Comp Biol. https://doi.org/10.1371/journal.pcbi.1007099.
 ```
 
 ## Dependencies
@@ -70,16 +70,24 @@ factor : numeric
     Default is 1e6 (RPM)
 ```
 
-**riptide.contextualize() - Create context-specific model based on transcript distribution**
+**riptide.contextualize() - Create context-specific model based on transcript distribution with maximum fit of flux distribution to input transctiptome**
 ```
 REQUIRED
 model : cobra.Model
     The model to be contextualized
-
-OPTIONAL
 transcriptome : dictionary
     Dictionary of transcript abundances, output of read_transcription_file()
-    With default, an artifical transcriptome is generated where all abundances equal 1.0
+
+OPTIONAL
+cpus  : int
+    CPUs number for parallelization
+    Default is all available 
+frac_min : float
+    Lower bound for range of minimal fractions to test
+    Default is 0.25
+frac_max : float
+    Upper bound for range of minimal fractions to test
+    Default is 0.85
 samples : int 
     Number of flux samples to collect
     Default is 500
@@ -89,9 +97,6 @@ silent  : bool
 exch_weight : bool
     Weight exchange reactions the same as adjacent transporters
     Default is True
-fraction : float
-    Minimum percent of optimal objective value during FBA steps
-    Default is 0.8
 minimum : float
     Minimum linear coefficient allowed during weight calculation for pFBA
     Default is None
@@ -128,11 +133,28 @@ defined : False or list
     Works best paired with binned abundance catagories from riptide.read_transcription_file()
     Default is False
 open_exchanges : bool
-    Sets all exchange reactions bounds to (-1000., 1000)
+    Sets all exchange reactions bounds to (-1000., 1000.)
     Default is False
 skip_fva : bool
     Skips final flux variability analysis
     Default is False
+```
+
+**riptide.single_contextualize() - Create context-specific model based on transcript distribution with user-defined objective flux minimum**
+```
+REQUIRED
+model : cobra.Model
+    The model to be contextualized
+
+OPTIONAL
+transcriptome : dictionary
+    Dictionary of transcript abundances, output of read_transcription_file()
+    With default, an artifical transcriptome is generated where all abundances equal 1.0
+fraction : float
+    Minimum objective fraction used during single run setting
+    Default is 0.8
+
+* Other arguments from iterative implementation are carried over (excluding frac_min and frac_max)
 ```
 
 **riptide.save_output() - Writes RIPTiDe results to files in a new directory**
@@ -231,7 +253,8 @@ context_specific_flux_samples = riptide_object.flux_samples
 
 ## Additional Information
 
-Thank you for your interest in RIPTiDe, for additional questions please email mattjenior@gmail.com.
+Thank you for your interest in RIPTiDe!
+
 
 If you encounter any problems, please [file an issue](https://github.com/mjenior/riptide/issues) along with a detailed description.
 

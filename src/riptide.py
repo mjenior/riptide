@@ -343,7 +343,7 @@ def _rarefy(abunds, n):
 # Version of riptide.contextualize compatible with multiprocessing
 def _iter_riptide(frac, argDict):
     
-    iter = _single(model=argDict['model'], transcriptome=argDict['transcriptome'], fraction=frac, 
+    iter = single_contextualize(model=argDict['model'], transcriptome=argDict['transcriptome'], fraction=frac, 
                          silent=argDict['silent'], samples=argDict['samples'], exch_weight=argDict['exch_weight'], 
                          minimum=argDict['minimum'], conservative=argDict['conservative'], objective=argDict['objective'], 
                          additive=argDict['additive'], important=argDict['important'], set_bounds=argDict['set_bounds'], 
@@ -410,9 +410,6 @@ def contextualize(model, transcriptome = 'none', frac_min = 0.25, frac_max = 0.8
     frac_max : float
         Upper bound for range of minimal fractions to test
         Default is 0.85
-    first_max : bool
-        Exits early if next subsequent iteration has a worse correlation
-        Default is False
     samples : int 
         Number of flux samples to collect
         Default is 500
@@ -422,12 +419,9 @@ def contextualize(model, transcriptome = 'none', frac_min = 0.25, frac_max = 0.8
     exch_weight : bool
         Weight exchange reactions the same as adjacent transporters
         Default is True
-    fraction : float
-        Minimum percent of optimal objective value during FBA steps
-        Default is 0.8
     minimum : float
         Minimum linear coefficient allowed during weight calculation for pFBA
-        Default is None
+        Default is False
     conservative : bool
         Conservatively remove inactive reactions based on GPR rules (all member reactions must be inactive to prune)
         Default is False
@@ -540,7 +534,7 @@ def contextualize(model, transcriptome = 'none', frac_min = 0.25, frac_max = 0.8
 
 
 # Create context-specific model based on transcript distribution
-def _single(model, transcriptome = 'none', samples = 500, silent = False, exch_weight = False, 
+def single_contextualize(model, transcriptome = 'none', samples = 500, silent = False, exch_weight = False, 
     fraction = 0.8, minimum = None, conservative = False, objective = True, additive = False, important = [], direct = False,
     set_bounds = True, tasks = [], exclude = [], gpr = False, threshold = 1e-6, open_exchanges = False, skip_fva = False):
 
@@ -561,10 +555,14 @@ def _single(model, transcriptome = 'none', samples = 500, silent = False, exch_w
     transcriptome : dictionary
         Dictionary of transcript abundances, output of read_transcription_file()
         With default, an artifical transcriptome is generated where all abundances equal 1.0
+    fraction : float
+        Minimum objective fraction used during single run setting
+        Default is 0.8
+
+    * Most other arguments from iterative implementation are carried over
     '''
 
     start_time = time.time()
-    print('WARNING: This function is deprecated as of 3.4.1')
     seed(937162211)
 
     riptide_object = riptideClass()
@@ -588,11 +586,13 @@ def _single(model, transcriptome = 'none', samples = 500, silent = False, exch_w
         fraction = 0.01
     elif fraction >= 1.0: 
         fraction = 0.99
-    if minimum != None:
+    if minimum != False:
         if minimum <= 0.0: 
             minimum = 0.0001
         elif minimum > 1.0: 
             minimum = 0.0001
+    elif minimum == False:
+        minimum = None
     riptide_object.additional_parameters['minimum'] = minimum
     solution = model.slim_optimize()
     if model.slim_optimize() < 1e-6 or str(model.slim_optimize()) == 'nan':
