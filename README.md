@@ -94,9 +94,6 @@ samples : int
 silent  : bool
     Silences std out 
     Default is False
-exch_weight : bool
-    Weight exchange reactions the same as adjacent transporters
-    Default is True
 minimum : float
     Minimum linear coefficient allowed during weight calculation for pFBA
     Default is None
