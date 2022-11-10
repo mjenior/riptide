@@ -231,7 +231,7 @@ context_specific_flux_samples = riptide_object.flux_samples
 
 ## Additional Information
 
-Thank you for your interest in RIPTiDe, for additional questions please email mljenior@virginia.edu.
+Thank you for your interest in RIPTiDe, for additional questions please email mattjenior@gmail.com.
 
 If you encounter any problems, please [file an issue](https://github.com/mjenior/riptide/issues) along with a detailed description.
 
