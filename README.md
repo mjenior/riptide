@@ -96,7 +96,7 @@ silent  : bool
     Default is False
 minimum : float
     Minimum linear coefficient allowed during weight calculation for pFBA
-    Default is None
+    Default is False
 conservative : bool
     Conservatively remove inactive reactions based on GPR rules (all member reactions must be inactive to prune)
     Default is False

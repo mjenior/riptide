@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: riptide
-Version: 3.4.5
+Version: 3.4.9
 Summary: Reaction Inclusion by Parsimony and Transcript Distribution (RIPTiDe)
 Author-email: Matthew Jenior <mattjenior@gmail.com>
 Project-URL: Homepage, https://github.com/mjenior/riptide
@@ -108,12 +108,9 @@ samples : int
 silent  : bool
     Silences std out 
     Default is False
-exch_weight : bool
-    Weight exchange reactions the same as adjacent transporters
-    Default is True
 minimum : float
     Minimum linear coefficient allowed during weight calculation for pFBA
-    Default is None
+    Default is False
 conservative : bool
     Conservatively remove inactive reactions based on GPR rules (all member reactions must be inactive to prune)
     Default is False

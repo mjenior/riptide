@@ -94,8 +94,9 @@ def save_output(riptide_obj='NULL', path='NULL', file_type='JSON'):
     if isinstance(riptide_obj.flux_samples, str) == False:
         outFile = path + '/flux_samples.tsv'
         riptide_obj.flux_samples.to_csv(outFile, sep='\t')
-    outFile = path + '/flux_variability.tsv'
-    riptide_obj.flux_variability.to_csv(outFile, sep='\t')
+    if isinstance(riptide_obj.flux_variability, str) == False:
+        outFile = path + '/flux_variability.tsv'
+        riptide_obj.flux_variability.to_csv(outFile, sep='\t')
 
     # Write coefficient dictionaries to tsvs
     outFile = path + '/flux_minimization_coefficients.tsv'
@@ -340,7 +341,7 @@ def _rarefy(abunds, n):
 def _iter_riptide(frac, argDict):
     
     iter = single_contextualize(model=argDict['model'], transcriptome=argDict['transcriptome'], fraction=frac, 
-                         silent=True, samples=argDict['samples'], 
+                         silent=argDict['silent'], samples=argDict['samples'], 
                          minimum=argDict['minimum'], conservative=argDict['conservative'], objective=argDict['objective'], 
                          additive=argDict['additive'], important=argDict['important'], set_bounds=argDict['set_bounds'], 
                          tasks=argDict['tasks'], exclude=argDict['exclude'], gpr=argDict['gpr'], threshold=argDict['threshold'], 
@@ -352,7 +353,8 @@ def _iter_riptide(frac, argDict):
 def _find_best_fit(frac_range, argDict):
     increment = 100.0 / float(len(frac_range))
     progress = 0.0
-    sys.stdout.write('\rProgress: 0%')
+    if argDict['silent'] == False:
+        sys.stdout.write('\rProgress: 0%')
     
     maxfit_report = {}
     with concurrent.futures.ProcessPoolExecutor(max_workers=argDict['cpus']) as executor:
@@ -363,8 +365,9 @@ def _find_best_fit(frac_range, argDict):
             result = job.result()
             progress += increment
             progress = float("%.3f" % progress)
-            sys.stdout.write('\rProgress: ' + str(progress) + '%')
-            sys.stdout.flush()
+            if argDict['silent'] == False:
+                sys.stdout.write('\rProgress: ' + str(progress) + '%')
+                sys.stdout.flush()
 
             maxfit_report[result.fraction_of_optimum] = result.concordance
 
@@ -374,7 +377,8 @@ def _find_best_fit(frac_range, argDict):
             elif result.concordance['r'] > best_fit.concordance['r']:
                 best_fit = result
 
-    sys.stdout.write('\rProgress: 100%      \n\n')
+    if argDict['silent'] == False:
+        sys.stdout.write('\rProgress: 100%      \n\n')
     best_fit.maxfit_report = maxfit_report
 
     return best_fit
@@ -382,7 +386,7 @@ def _find_best_fit(frac_range, argDict):
 
 # Iteratively run RIPTiDe over a range of objective minimum fractions
 def contextualize(model, transcriptome = 'none', frac_min = 0.25, frac_max = 0.85, 
-    samples = 500, cpus = 'all', minimum = None, conservative = False, objective = True, additive = False, 
+    samples = 500, cpus = 'all', minimum = False, conservative = False, objective = True, additive = False, 
     important = [], set_bounds = True, silent = False, tasks = [], exclude = [], gpr = False, threshold = 1e-6, open_exchanges = False):
 
     '''Iterative RIPTiDe for a range of minimum objective fluxes, returns model with best fit to transcriptome
@@ -397,7 +401,7 @@ def contextualize(model, transcriptome = 'none', frac_min = 0.25, frac_max = 0.8
         Dictionary of transcript abundances, output of read_transcription_file()
     
     OPTIONAL
-    cpus  : int
+    cpus : int
         CPUs number for parallelization
         Default is all available 
     frac_min : float
@@ -409,7 +413,7 @@ def contextualize(model, transcriptome = 'none', frac_min = 0.25, frac_max = 0.8
     samples : int 
         Number of flux samples to collect
         Default is 500
-    silent  : bool
+    silent : bool
         Silences std out 
         Default is False
     minimum : float
@@ -480,7 +484,7 @@ def contextualize(model, transcriptome = 'none', frac_min = 0.25, frac_max = 0.8
         print('WARNING: Improper maximum fraction provided, setting to default value')
         frac_max = 0.85
 
-    frac_step = 0.05
+    frac_step = 0.1
     frac_range = [round(x, 3) for x in list(numpy.arange(frac_min, frac_max+frac_step, frac_step))]
     if len(frac_range) == 1:
         print('WARNING: Only a single fraction is possible in the input bounds and fraction')
@@ -488,7 +492,7 @@ def contextualize(model, transcriptome = 'none', frac_min = 0.25, frac_max = 0.8
     if silent == False:
         print('\nRunning max fit RIPTiDe for objective fraction range:', frac_min, 'to', frac_max, '...')
 
-    argDict = {'model':model, 'transcriptome':transcriptome, 'silent':True, 'cpus':cpus,
+    argDict = {'model':model, 'transcriptome':transcriptome, 'silent':silent, 'cpus':cpus,
                'samples':samples, 'minimum':minimum, 
                'conservative':conservative, 'objective':objective, 'additive':additive, 
                'important':important, 'set_bounds':set_bounds, 'tasks':tasks, 'exclude':exclude, 
@@ -497,20 +501,18 @@ def contextualize(model, transcriptome = 'none', frac_min = 0.25, frac_max = 0.8
     top_fit = _find_best_fit(frac_range, argDict)
     all_maxfit = top_fit.maxfit_report
     
+    if silent == False:
+        print('Testing local objective fractions to ' + str(top_fit.fraction_of_optimum) + '...')
+    small_frac_range = []
     while frac_step >= 0.025:
         frac_step = round(frac_step / 2.0, 3)
-        if silent == False:
-            print('Testing local objective fractions to ' + str(top_fit.fraction_of_optimum) + '...')
-
-        small_frac_range = [round(top_fit.fraction_of_optimum - frac_step, 3), top_fit.fraction_of_optimum, round(top_fit.fraction_of_optimum + frac_step, 3)]
-        new_fit = _find_best_fit(small_frac_range, argDict)
-
-        if new_fit.concordance['r'] <= top_fit.concordance['r']:
-            break
-        else:
-            top_fit = new_fit
-            for frac in new_fit.maxfit_report.keys():
-                all_maxfit[frac] = new_fit.maxfit_report[frac]
+        small_frac_range += [round(top_fit.fraction_of_optimum - frac_step, 3), round(top_fit.fraction_of_optimum + frac_step, 3)]
+    
+    new_fit = _find_best_fit(list(set(small_frac_range)), argDict)
+    if new_fit.concordance['r'] >= top_fit.concordance['r']:
+        top_fit = new_fit
+        for frac in new_fit.maxfit_report.keys():
+             all_maxfit[frac] = new_fit.maxfit_report[frac]
 
     top_fit.maxfit_report = all_maxfit
     top_fit.fraction_bounds = [frac_min, frac_max]
@@ -528,7 +530,7 @@ def contextualize(model, transcriptome = 'none', frac_min = 0.25, frac_max = 0.8
 
 # Create context-specific model based on transcript distribution
 def single_contextualize(model, transcriptome = 'none', samples = 500, silent = False, 
-    fraction = 0.8, minimum = None, conservative = False, objective = True, additive = False, important = [], direct = False,
+    fraction = 0.8, minimum = False, conservative = False, objective = True, additive = False, important = [], direct = False,
     set_bounds = True, tasks = [], exclude = [], gpr = False, threshold = 1e-6, open_exchanges = False, skip_fva = False):
 
     '''Reaction Inclusion by Parsimony and Transcriptomic Distribution or RIPTiDe
