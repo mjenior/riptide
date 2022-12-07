@@ -505,12 +505,6 @@ def contextualize(model, transcriptome = 'none', frac_min = 0.25, frac_max = 0.8
             print('WARNING: Only a single fraction is possible in the input bounds and fraction')
 
     if silent == False:
-        try:
-            model_name = model.name
-        except:
-            model_name = [key for key, value in locals().items() if value == model][0]
-        transcriptome_name = [key for key, value in locals().items() if value == transcriptome][0]
-        print('Contextualizing', transcriptome_name, 'in', model_name)
         print('Running max fit RIPTiDe for objective fraction range:', frac_min, 'to', frac_max, '...')
 
     argDict = {'model':model, 'transcriptome':transcriptome, 'silent':silent, 'cpus':cpus,
