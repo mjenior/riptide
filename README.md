@@ -88,6 +88,9 @@ frac_min : float
 frac_max : float
     Upper bound for range of minimal fractions to test
     Default is 0.85
+frac_step : float
+    Starting interval size within fraction range
+    Default is 0.1
 samples : int 
     Number of flux samples to collect
     Default is 500

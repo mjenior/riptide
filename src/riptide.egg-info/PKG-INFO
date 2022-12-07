@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: riptide
-Version: 3.4.9
+Version: 3.4.17
 Summary: Reaction Inclusion by Parsimony and Transcript Distribution (RIPTiDe)
 Author-email: Matthew Jenior <mattjenior@gmail.com>
 Project-URL: Homepage, https://github.com/mjenior/riptide
@@ -102,6 +102,9 @@ frac_min : float
 frac_max : float
     Upper bound for range of minimal fractions to test
     Default is 0.85
+frac_step : float
+    Starting interval size within fraction range
+    Default is 0.1
 samples : int 
     Number of flux samples to collect
     Default is 500
