@@ -68,6 +68,9 @@ norm : bool
 factor : numeric
     Denominator for read normalization calculation
     Default is 1e6 (RPM)
+silent  : bool
+    Silences std out 
+    Default is False
 ```
 
 **riptide.contextualize() - Create context-specific model based on transcript distribution with maximum fit of flux distribution to input transctiptome**
@@ -88,6 +91,9 @@ frac_min : float
 frac_max : float
     Upper bound for range of minimal fractions to test
     Default is 0.85
+frac_step : float
+    Starting interval size within fraction range
+    Default is 0.1
 samples : int 
     Number of flux samples to collect
     Default is 500
@@ -96,7 +102,7 @@ silent  : bool
     Default is False
 minimum : float
     Minimum linear coefficient allowed during weight calculation for pFBA
-    Default is None
+    Default is False
 conservative : bool
     Conservatively remove inactive reactions based on GPR rules (all member reactions must be inactive to prune)
     Default is False
@@ -167,6 +173,9 @@ file_type : str
     Type of output file for RIPTiDe model
     Accepts either sbml or json
     Default is JSON
+silent  : bool
+    Silences std out 
+    Default is False
 ```
 
 ## Usage
