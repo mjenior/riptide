@@ -68,6 +68,9 @@ norm : bool
 factor : numeric
     Denominator for read normalization calculation
     Default is 1e6 (RPM)
+silent  : bool
+    Silences std out 
+    Default is False
 ```
 
 **riptide.contextualize() - Create context-specific model based on transcript distribution with maximum fit of flux distribution to input transctiptome**
@@ -170,6 +173,9 @@ file_type : str
     Type of output file for RIPTiDe model
     Accepts either sbml or json
     Default is JSON
+silent  : bool
+    Silences std out 
+    Default is False
 ```
 
 ## Usage
