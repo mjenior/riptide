@@ -395,7 +395,7 @@ def _find_best_fit(frac_range, argDict):
 
 
 # Iteratively run RIPTiDe over a range of objective minimum fractions
-def maxfit(model, transcriptome = 'none', frac_min = 0.25, frac_max = 0.85, frac_step = 0.1,
+def maxfit(model, transcriptome = 'none', frac_min = 0.25, frac_max = 0.85, frac_step = 0.1, prune = True,
     samples = 500, cpus = 'all', minimum = False, conservative = False, objective = True, additive = False, 
     important = [], set_bounds = True, silent = False, tasks = [], exclude = [], gpr = False, threshold = 1e-5, open_exchanges = False):
 
@@ -425,6 +425,9 @@ def maxfit(model, transcriptome = 'none', frac_min = 0.25, frac_max = 0.85, frac
     frac_step : float
         Starting interval size within fraction range
         Default is 0.1
+    prune : bool
+        Perform pruning step
+        Default is True
     samples : int 
         Number of flux samples to collect
         Default is 500
@@ -547,7 +550,7 @@ def maxfit(model, transcriptome = 'none', frac_min = 0.25, frac_max = 0.85, frac
 
 
 # Create context-specific model based on transcript distribution
-def contextualize(model, transcriptome = 'none', samples = 500, silent = False, 
+def contextualize(model, transcriptome = 'none', samples = 500, silent = False, prune = True,
     fraction = 0.8, minimum = False, conservative = False, objective = True, additive = False, important = [], direct = False,
     set_bounds = True, tasks = [], exclude = [], gpr = False, threshold = 1e-5, open_exchanges = False, skip_fva = False, phase=1):
 
@@ -572,7 +575,7 @@ def contextualize(model, transcriptome = 'none', samples = 500, silent = False,
         Minimum objective fraction used during single run setting
         Default is 0.8
 
-    * Most other arguments from iterative implementation are carried over
+    * Other arguments from iterative implementation are carried over
     '''
 
     start_time = time.time()
@@ -654,7 +657,7 @@ def contextualize(model, transcriptome = 'none', samples = 500, silent = False,
 
     # Remove totally blocked reactions to speed up subsequent sections
     rm_rxns = list(set(exclude).difference(set(tasks)))
-    if len(rm_rxns) > 0:
+    if len(rm_rxns) > 0 and prune == True:
         riptide_model = _prune_model(riptide_model, rm_rxns, conservative)
 
     # Define linear coefficients for both steps
@@ -685,8 +688,10 @@ def contextualize(model, transcriptome = 'none', samples = 500, silent = False,
 
     # Determine inactive reactions and prune model
     rm_rxns = set([x.id for x in riptide_model.reactions]).difference(keep_rxns)
-    riptide_model = _prune_model(riptide_model, rm_rxns, conservative)
-    riptide_object.pruned = _record_pruned_elements(model, riptide_model)
+    if len(rm_rxns) > 0 and prune == True:
+        riptide_model = _prune_model(riptide_model, rm_rxns, conservative)
+        riptide_object.pruned = _record_pruned_elements(model, riptide_model)
+
     riptide_object.minimization_coefficients = all_min_coefficient_dict
     riptide_object.percent_of_mapping = gene_hits
 
