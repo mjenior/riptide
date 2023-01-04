@@ -73,7 +73,7 @@ silent  : bool
     Default is False
 ```
 
-**riptide.contextualize() - Create context-specific model based on transcript distribution with maximum fit of flux distribution to input transctiptome**
+**riptide.maxfit() - Create context-specific model based on transcript distribution with maximum fit of flux distribution to input transctiptome**
 ```
 REQUIRED
 model : cobra.Model
@@ -94,6 +94,9 @@ frac_max : float
 frac_step : float
     Starting interval size within fraction range
     Default is 0.1
+prune : bool
+    Perform pruning step
+    Default is True
 samples : int 
     Number of flux samples to collect
     Default is 500
@@ -143,7 +146,7 @@ skip_fva : bool
     Default is False
 ```
 
-**riptide.single_contextualize() - Create context-specific model based on transcript distribution with user-defined objective flux minimum**
+**riptide.contextualize() - Create context-specific model based on transcript distribution with user-defined objective flux minimum**
 ```
 REQUIRED
 model : cobra.Model
