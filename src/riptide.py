@@ -49,7 +49,7 @@ def save_output(riptide_obj='NULL', path='NULL', file_type='JSON', silent=False)
 
     REQUIRED
     riptide_obj : RIPTiDe object
-        Class object created by riptide.contextualize()
+        Class object created by riptide.contextualize() or riptide.maxfit()
 
     OPTIONAL
     path : str
@@ -349,7 +349,7 @@ def _rarefy(abunds, n):
 # Version of riptide.contextualize compatible with multiprocessing
 def _iter_riptide(frac, argDict):
     
-    iter = single_contextualize(model=argDict['model'], transcriptome=argDict['transcriptome'], fraction=frac, 
+    iter = contextualize(model=argDict['model'], transcriptome=argDict['transcriptome'], fraction=frac, 
                          silent=argDict['silent'], samples=argDict['samples'], 
                          minimum=argDict['minimum'], conservative=argDict['conservative'], objective=argDict['objective'], 
                          additive=argDict['additive'], important=argDict['important'], set_bounds=argDict['set_bounds'], 
@@ -395,7 +395,7 @@ def _find_best_fit(frac_range, argDict):
 
 
 # Iteratively run RIPTiDe over a range of objective minimum fractions
-def contextualize(model, transcriptome = 'none', frac_min = 0.25, frac_max = 0.85, frac_step = 0.1,
+def maxfit(model, transcriptome = 'none', frac_min = 0.25, frac_max = 0.85, frac_step = 0.1,
     samples = 500, cpus = 'all', minimum = False, conservative = False, objective = True, additive = False, 
     important = [], set_bounds = True, silent = False, tasks = [], exclude = [], gpr = False, threshold = 1e-5, open_exchanges = False):
 
@@ -547,7 +547,7 @@ def contextualize(model, transcriptome = 'none', frac_min = 0.25, frac_max = 0.8
 
 
 # Create context-specific model based on transcript distribution
-def single_contextualize(model, transcriptome = 'none', samples = 500, silent = False, 
+def contextualize(model, transcriptome = 'none', samples = 500, silent = False, 
     fraction = 0.8, minimum = False, conservative = False, objective = True, additive = False, important = [], direct = False,
     set_bounds = True, tasks = [], exclude = [], gpr = False, threshold = 1e-5, open_exchanges = False, skip_fva = False, phase=1):
 
