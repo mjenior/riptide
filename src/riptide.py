@@ -253,12 +253,14 @@ def read_transcription_file(file, header = False, sep = '\t', rarefy = False, le
         if header == True: header_line = transcription.readline()
 
         for line in transcription:
-            line = line.split(sep)
-            abundances = [float(x) for x in line[1:]]
-            abund_dict[str(line[0])] = abundances
-            total_transcript += float(numpy.median(abundances))
-            min_transcript += float(min(abundances))
-            if reps < len(abundances): reps = len(abundances)
+            line = line.strip().split(sep)
+            abundances = line[1:]
+            if len(abundances) > 0:
+                abundances = [float(x) for x in abundances]
+                abund_dict[str(line[0])] = abundances
+                total_transcript += float(numpy.median(abundances))
+                min_transcript += float(min(abundances))
+                if reps < len(abundances): reps = len(abundances)
 
         abund_dict['replicates'] = reps
 
@@ -363,19 +365,24 @@ def _find_best_fit(frac_range, argDict):
     increment = 100.0 / float(len(frac_range))
     progress = 0.0
     if argDict['silent'] == False:
-        sys.stdout.write('\rProgress: 0%')
+        sys.stdout.write('\rProgress: 0%     ')
     
     maxfit_report = {}
     with concurrent.futures.ProcessPoolExecutor(max_workers=argDict['cpus']) as executor:
 
         maxfit_jobs = [executor.submit(_iter_riptide, frac, argDict) for frac in frac_range]
         first_iter = 1
+        warnings.filterwarnings('ignore', category=UserWarning)
         for job in concurrent.futures.as_completed(maxfit_jobs):
-            result = job.result()
             progress += increment
+            try:
+                result = job.result()
+            except:
+                continue
+
             progress = float("%.3f" % progress)
             if argDict['silent'] == False:
-                sys.stdout.write('\rProgress: ' + str(progress) + '%')
+                sys.stdout.write('\rProgress: ' + str(progress) + '%       ')
                 sys.stdout.flush()
 
             maxfit_report[result.fraction_of_optimum] = result.concordance
@@ -385,6 +392,8 @@ def _find_best_fit(frac_range, argDict):
                 first_iter = 0
             elif result.concordance['r'] > best_fit.concordance['r']:
                 best_fit = result
+
+    warnings.filterwarnings('default', category=UserWarning)
 
     if argDict['silent'] == False:
         sys.stdout.write('\rProgress: 100%         \n\n')
@@ -609,8 +618,8 @@ def contextualize(model, transcriptome = 'none', samples = 500, silent = False, 
     elif minimum == False:
         minimum = None
     riptide_object.additional_parameters['minimum'] = minimum
-    solution = model.slim_optimize()
-    if model.slim_optimize() < 1e-6 or str(model.slim_optimize()) == 'nan':
+    solution = model.slim_optimize(error_value=0.)
+    if solution < 1e-6:
         raise ValueError('ERROR: Provided model objective cannot carry flux! Please correct')
     minimum_threshold = threshold
     if isinstance(tasks, list) == False: tasks = [tasks]
@@ -717,7 +726,12 @@ def contextualize(model, transcriptome = 'none', samples = 500, silent = False, 
     if set_bounds == True and skip_fva == False: 
         for rxn in riptide_model.reactions:
             current_fva = list(fva_result.loc[rxn.id])
-            rxn.bounds = (min(current_fva), max(current_fva))
+            current_lb = min(current_fva)
+            current_ub = max(current_fva)
+            if current_lb == current_ub:
+                current_lb = current_lb * 0.9
+                current_ub = current_ub * 1.1
+            rxn.bounds = (current_lb, current_ub)
     riptide_object.model = riptide_model
 
     # Report on included subset of user-defined important genes
@@ -882,7 +896,7 @@ def _integrate_tasks(model, tasks):
     # Iteratively set each as the objective and find new bounds
     for rxn in screened_tasks:
         model.objective = rxn
-        task_obj_val = model.slim_optimize()
+        task_obj_val = model.slim_optimize(error_value=0.)
         # Check sign of objective value, just in case
         if task_obj_val > 0.0:
             task_constraint = model.problem.Constraint(model.objective.expression, lb=task_obj_val*0.01, ub=task_obj_val)
@@ -933,7 +947,7 @@ def _constrain_and_analyze_model(model, coefficient_dict, fraction, sampling_dep
 
     # Set previous objective as a constraint, allow deviation
     if objective == True:
-        prev_obj_val = constrained_model.slim_optimize()
+        prev_obj_val = constrained_model.slim_optimize(error_value=0.)
         prev_obj_constraint = constrained_model.problem.Constraint(constrained_model.objective.expression, lb=prev_obj_val*fraction, ub=prev_obj_val)
         constrained_model.add_cons_vars([prev_obj_constraint])
         constrained_model.solver.update()
@@ -964,7 +978,7 @@ def _constrain_and_analyze_model(model, coefficient_dict, fraction, sampling_dep
         # Explore solution space of constrained model with flux sampling, allow deviation
         constrained_model.objective = constrained_model.problem.Objective(pfba_expr, direction='max', sloppy=True)
         constrained_model.solver.update()
-        flux_sum_obj_val = constrained_model.slim_optimize()
+        flux_sum_obj_val = constrained_model.slim_optimize(error_value=0.)
         flux_sum_constraint = constrained_model.problem.Constraint(pfba_expr, lb=flux_sum_obj_val*fraction, ub=flux_sum_obj_val)
         constrained_model.add_cons_vars([flux_sum_constraint])
         constrained_model.solver.update()
@@ -1106,14 +1120,14 @@ def _operation_report(start_time, model, riptide, concordance, silent, phase):
     model_check = 'works'
     # Check that prune model can still achieve flux through the objective (just in case)
     try:
-        if riptide.slim_optimize() < 1e-6 or str(riptide.slim_optimize()) == 'nan':
+        if riptide.slim_optimize(error_value=0.) < 1e-6:
             model_check = 'broken'
     except:
         pass
 
     if model_check == 'works':
-        new_ov = round(riptide.slim_optimize(), 2)
-        old_ov = round(model.slim_optimize(), 2)
+        new_ov = round(riptide.slim_optimize(error_value=0.), 2)
+        old_ov = round(model.slim_optimize(error_value=0.), 2)
         perc_shift = 100.0 - ((float(new_ov) / float(old_ov)) * 100.0)
         report_dict['obj_change'] = round(perc_shift, 2)
         if perc_shift == 0.0:
