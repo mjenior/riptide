@@ -395,7 +395,7 @@ def _find_best_fit(frac_range, argDict, prev_best=None):
 
 # Iteratively run RIPTiDe over a range of objective minimum fractions
 def maxfit(model, transcriptome = 'none', frac_min = 0.25, frac_max = 0.85, frac_step = 0.1, prune = True,
-    samples = 1000, cpus = 'all', minimum = False, conservative = False, objective = True, additive = False, 
+    samples = 1000, minimum = False, conservative = False, objective = True, additive = False, 
     important = [], set_bounds = True, silent = False, tasks = [], exclude = [], gpr = False, threshold = 1e-5):
 
     '''
@@ -470,10 +470,6 @@ def maxfit(model, transcriptome = 'none', frac_min = 0.25, frac_max = 0.85, frac
         raise ValueError('ERROR: Iterative RIPTiDe requires >100 flux sampling depth')
     if transcriptome == 'none':
         raise ValueError('ERROR: Iterative RIPTiDe requires an input transcriptome')
-    if cpus == 'all':
-        cpus = os.cpu_count()
-    elif isinstance(cpus, int) == False:
-        raise ValueError('ERROR: Invalid number of threads provided')
 
     if _test_exchange_space(model, minimum=1e5):
         raise ValueError('ERROR: Solution space is too constrained to analyze by current exchange bounds')
@@ -503,7 +499,7 @@ def maxfit(model, transcriptome = 'none', frac_min = 0.25, frac_max = 0.85, frac
     if silent == False:
         print('Running max fit RIPTiDe for objective fraction range:', frac_min, 'to', frac_max, '...')
 
-    argDict = {'model':model, 'transcriptome':transcriptome, 'silent':silent, 'cpus':cpus,
+    argDict = {'model':model, 'transcriptome':transcriptome, 'silent':silent, 
                'samples':samples, 'minimum':minimum, 
                'conservative':conservative, 'objective':objective, 'additive':additive, 
                'important':important, 'set_bounds':set_bounds, 'tasks':tasks, 'exclude':exclude, 
@@ -1130,6 +1126,7 @@ def _operation_report(start_time, model, riptide, concordance, silent, phase):
                     print('Flux through the objective INCREASED to ~' + str(new_ov) + ' from ' + str(old_ov) + ' (' + str(perc_shift) + '% change)')
     else:
         report_dict['obj_change'] = 'fails'
+        print('WARNING: Context-specific model has no objective flux.')
 
     # Report concordance
     if concordance != 'Not performed':
