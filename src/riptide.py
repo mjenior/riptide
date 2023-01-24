@@ -971,10 +971,13 @@ def _constrain_and_analyze_model(model, coefficient_dict, fraction, sampling_dep
             
         # Analyze flux ranges and calculate concordance
         if sampling_depth != 1:
-            warnings.filterwarnings('ignore') # Handle possible infeasible warnings
-            flux_samples = _gapsplit(constrained_model, depth=sampling_depth)
-            warnings.filterwarnings('default')
-            concordance = _calc_concordance(flux_samples, coefficient_dict)
+            try:
+                flux_samples = _gapsplit(constrained_model, depth=sampling_depth)
+                concordance = _calc_concordance(flux_samples, coefficient_dict)
+            except:
+                print('WARNING: Reaction weighting constraints infeasible for FVA at objective fraction', fraction)
+                flux_samples = 'Not performed'
+                concordance = 'Not performed'
         else:
             flux_samples = 'Not performed'
             concordance = 'Not performed'
@@ -1191,6 +1194,8 @@ def _test_exchange_space(model, minimum=1e5):
 # bioRxiv 652917; doi: https://doi.org/10.1101/652917 
 
 def _gapsplit(model, depth):
+    warnings.filterwarnings('ignore') # Handle some infeasible warnings
+
     fva = flux_variability_analysis(model, list(model.reactions), fraction_of_optimum=0.001, processes=1)
 
     # only split reactions with feasible range >= min_range
@@ -1217,6 +1222,7 @@ def _gapsplit(model, depth):
         # max_tries reached; return fewer samples
         samples = samples[:k,:]
 
+    warnings.filterwarnings('default')
     return pandas.DataFrame(data=samples, columns=fva.maximum.index)
 
 def _generate_sample(model, primary_var, primary_lb, primary_ub):
