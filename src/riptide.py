@@ -699,7 +699,7 @@ def contextualize(model, transcriptome = 'none', samples = 1000, silent = False,
     riptide_object.concordance = concordance
 
     # Assign new reaction bounds
-    if set_bounds == True: 
+    if set_bounds == True and flux_samples != 'Not performed':
         for rxn in riptide_model.reactions:
             current_dist = list(flux_samples[rxn.id])
             
