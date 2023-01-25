@@ -639,7 +639,7 @@ def contextualize(model, transcriptome = 'none', samples = 1000, silent = False,
     
     # Define linear coefficients for both steps
     rxn_transcriptome, gene_hits = _transcript_to_reactions(transcriptome, model, gpr, additive)
-    keep_rxns = set()
+    rm_rxns = set([x.id for x in model.reactions])
     all_min_coefficient_dict = {}
     if silent == False:
         if phase == 1:
@@ -660,13 +660,10 @@ def contextualize(model, transcriptome = 'none', samples = 1000, silent = False,
         
         # Determine active network sections based on coefficients
         active_rxns = _constrain_and_analyze_model(model=model, coefficient_dict=min_coefficient_dict, fraction=fraction, sampling_depth=0, 
-            objective=objective, tasks=tasks, minimum_threshold=minimum_threshold)
-        keep_rxns = keep_rxns.union(active_rxns)
+            objective=objective, tasks=tasks, minimum_threshold=minimum_threshold, silent=silent)
+        rm_rxns = rm_rxns.difference(active_rxns)
 
     # Determine inactive reactions and prune model
-    rm_rxns = set(list(set(exclude).difference(set(tasks))))
-    rm_rxns = set([x.id for x in model.reactions]).difference(keep_rxns)
-    rm_rxns = rm_rxns.difference(set(tasks))
     rm_rxns = rm_rxns.union(set(exclude))
     if len(rm_rxns) > 0 and prune == True:
         riptide_model = _prune_model(model, rm_rxns, conservative)
@@ -689,7 +686,7 @@ def contextualize(model, transcriptome = 'none', samples = 1000, silent = False,
             median_rxn_transcriptome[x] = numpy.median(rxn_transcriptome[x])
     min_coefficient_dict, max_coefficient_dict, important_type = _assign_coefficients(median_rxn_transcriptome, riptide_model, important, direct)
     flux_samples, concordance = _constrain_and_analyze_model(model=riptide_model, coefficient_dict=max_coefficient_dict, fraction=fraction, 
-        sampling_depth=samples, objective=objective, tasks=tasks, minimum_threshold=minimum_threshold)
+        sampling_depth=samples, objective=objective, tasks=tasks, minimum_threshold=minimum_threshold, silent=silent)
     riptide_object.maximization_coefficients = max_coefficient_dict
     riptide_object.flux_samples = flux_samples
     riptide_object.concordance = concordance
@@ -848,7 +845,7 @@ def _assign_coefficients(rxn_transcript_dict, model, important, direct):
 
 
 # Assemble a corrected list of metabolic tasks based on user
-def _integrate_tasks(model, tasks):
+def _integrate_tasks(model, tasks, silent):
     # Check that each task is in the model
     screened_tasks = []
     for x in set(tasks):
@@ -868,23 +865,27 @@ def _integrate_tasks(model, tasks):
 
     # Check if any reactions were found in the model that correspond with supplied IDs
     if len(screened_tasks) == 0:
-        print('WARNING: No reactions found associated with provided task IDs')
+        if silent == False:
+            print('WARNING: No reactions found associated with provided task IDs')
 
-    # Iteratively set each as the objective and find new bounds
+    # Iteratively set each as the objective and find required reactions for flux
+    old_objID = str(model.objective.expression).split()[0].split('*')[-1]
+    task_reactions = set()
     for rxn in screened_tasks:
-        model.objective = rxn
-        task_obj_val = model.slim_optimize(error_value=0.)
-        # Check sign of objective value, just in case
-        if task_obj_val > 0.0:
-            task_constraint = model.problem.Constraint(model.objective.expression, lb=task_obj_val*0.01, ub=task_obj_val)
-            model.add_cons_vars(task_constraint)
-            model.solver.update()
-        elif task_obj_val < 0.0:
-            task_constraint = model.problem.Constraint(model.objective.expression, lb=task_obj_val, ub=task_obj_val*0.01)
-            model.add_cons_vars(task_constraint)
-            model.solver.update()
-    
-    return model
+
+        rxn_bounds = model.reactions.get_by_id(rxn).bounds
+        model.reactions.get_by_id(rxn).bounds = (-1., 1.)
+
+        model.objective = model.problem.Objective(model.reactions.get_by_id(rxn).flux_expression, direction='max', sloppy=True)
+        model.solver.update()
+        task_fluxes = model.optimize().fluxes
+
+        task_reactions |= set([rxn.id for rxn in model.reactions if abs(task_fluxes[rxn.id]) >= 1e-5])
+        model.reactions.get_by_id(rxn).bounds = rxn_bounds
+
+    model.objective = old_objID
+
+    return task_reactions
 
 
 # Assign heaviest weight during pruning to user-defined important genes
@@ -918,7 +919,7 @@ def _integrate_important(model, important, coefficient_dict):
 
 
 # Determine those reactions that carry flux in a pFBA objective set to a threshold of maximum
-def _constrain_and_analyze_model(model, coefficient_dict, fraction, sampling_depth, objective, tasks, minimum_threshold):
+def _constrain_and_analyze_model(model, coefficient_dict, fraction, sampling_depth, objective, tasks, minimum_threshold, silent):
 
     constrained_model = deepcopy(model)
     constrained_model.id = str(constrained_model.id) + '_riptide'
@@ -944,16 +945,16 @@ def _constrain_and_analyze_model(model, coefficient_dict, fraction, sampling_dep
             continue
 
     if sampling_depth == 0:
-        # Include metabolic task constraints
-        if len(tasks) >= 1:
-            constrained_model = _integrate_tasks(constrained_model, tasks)
 
         # Determine reactions that do not carry any flux in highly constrained solution space
         constrained_model.objective = constrained_model.problem.Objective(pfba_expr, direction='min', sloppy=True)
         constrained_model.solver.update()
         solution = constrained_model.optimize()
-        active_rxns = set([rxn.id for rxn in constrained_model.reactions if abs(solution.fluxes[rxn.id]) > minimum_threshold])
-            
+        active_rxns = set([rxn.id for rxn in constrained_model.reactions if abs(solution.fluxes[rxn.id]) >= minimum_threshold])
+        
+        # Include metabolic task-related reactions
+        if len(tasks) >= 1: active_rxns |= _integrate_tasks(constrained_model, tasks, silent)
+
         return active_rxns
         
     else:
@@ -971,9 +972,10 @@ def _constrain_and_analyze_model(model, coefficient_dict, fraction, sampling_dep
                 flux_samples = _gapsplit(constrained_model, depth=sampling_depth)
                 concordance = _calc_concordance(flux_samples, coefficient_dict)
             except:
-                print('WARNING: Reaction weighting constraints infeasible for FVA at objective fraction', fraction)
                 flux_samples = 'Not performed'
                 concordance = 'Not performed'
+                if silent == False:
+                    print('WARNING: Reaction weighting constraints infeasible for FVA at objective fraction', fraction)
         else:
             flux_samples = 'Not performed'
             concordance = 'Not performed'
@@ -1108,12 +1110,13 @@ def _operation_report(start_time, model, riptide, concordance, silent, phase):
         pass
 
     if model_check == 'works':
-        new_ov = round(riptide.slim_optimize(error_value=0.), 2)
-        old_ov = round(model.slim_optimize(error_value=0.), 2)
+        new_ov = round(riptide.slim_optimize(error_value=0.), 4)
+        old_ov = round(model.slim_optimize(error_value=0.), 4)
         perc_shift = 100.0 - ((float(new_ov) / float(old_ov)) * 100.0)
         report_dict['obj_change'] = round(perc_shift, 2)
         if perc_shift == 0.0:
-            pass
+            if silent == False:
+                print('No change in objective flux of ~' + str(new_ov))
         elif perc_shift > 0.0:
             perc_shift = round(abs(perc_shift), 2)
             if silent == False:
@@ -1126,7 +1129,8 @@ def _operation_report(start_time, model, riptide, concordance, silent, phase):
                     print('Flux through the objective INCREASED to ~' + str(new_ov) + ' from ' + str(old_ov) + ' (' + str(perc_shift) + '% change)')
     else:
         report_dict['obj_change'] = 'fails'
-        print('WARNING: Context-specific model has no objective flux.')
+        if silent == False:
+            print('WARNING: Context-specific model has no objective flux.')
 
     # Report concordance
     if concordance != 'Not performed':
