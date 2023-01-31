@@ -377,7 +377,7 @@ def _find_best_fit(frac_range, argDict, prev_best=None):
         if argDict['silent'] == False: sys.stdout.write('\rProgress: ' + str(float("%.2f" % progress)) + '%        ')
     else:
         improved = 1
-        if argDict['silent'] == False: sys.stdout.write('\rProgress: ' + str(float("%.2f" % progress)) + '%  -  fit identified')
+        if argDict['silent'] == False: sys.stdout.write('\rProgress: ' + str(float("%.2f" % progress)) + '%  -  fit identified        ')
     
     # Identify best fit of flux sample to transcriptome
     improvement = False
@@ -402,18 +402,18 @@ def _find_best_fit(frac_range, argDict, prev_best=None):
                 sys.stdout.write('\rProgress: ' + str(float("%.2f" % progress)) + '%        ')
             elif improved == 0 or prev_best == None:
                 improved += 1
-                sys.stdout.write('\rProgress: ' + str(float("%.2f" % progress)) + '%  -  fit identified')
+                sys.stdout.write('\rProgress: ' + str(float("%.2f" % progress)) + '%  -  fit identified        ')
             else:
-                sys.stdout.write('\rProgress: ' + str(float("%.2f" % progress)) + '%  -  improved fit identified')
+                sys.stdout.write('\rProgress: ' + str(float("%.2f" % progress)) + '%  -  improved fit identified        ')
 
     if argDict['silent'] == False:
         if improvement == False:
             sys.stdout.write('\rProgress: 100%                          \n\n')
             sys.stdout.flush()
         elif improved == 0 or prev_best == None:
-            sys.stdout.write('\rProgress: ' + str(float("%.2f" % progress)) + '%  -  fit identified\n\n')
+            sys.stdout.write('\rProgress: ' + str(float("%.2f" % progress)) + '%  -  fit identified        \n\n')
         else:
-            sys.stdout.write('\rProgress: 100%  -  improved fit identified\n\n')
+            sys.stdout.write('\rProgress: 100%  -  improved fit identified        \n\n')
             sys.stdout.flush()
 
     best_fit.maxfit_report = maxfit_report
