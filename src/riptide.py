@@ -424,7 +424,7 @@ def _find_best_fit(frac_range, argDict, prev_best=None):
 # Iteratively run RIPTiDe over a range of objective minimum fractions
 def maxfit(model, transcriptome = 'none', frac_min = 0.1, frac_max = 0.9, frac_step = 0.1, prune = True,
     samples = 1000, minimum = False, conservative = False, objective = True, additive = False, 
-    set_bounds = True, silent = False, tasks = [], exclude = [], gpr = False, threshold = 1e-6):
+    set_bounds = True, silent = False, tasks = [], task_frac = 0.01, exclude = [], gpr = False, threshold = 1e-6):
 
     '''
     Iterative RIPTiDe for a range of minimum objective fluxes, returns model with best correlation 
@@ -478,6 +478,9 @@ def maxfit(model, transcriptome = 'none', frac_min = 0.1, frac_max = 0.9, frac_s
         Default is True
     tasks : list
         List of gene or reaction ID strings for forced inclusion in final model (metabolic tasks or essential genes)
+    task_frac : float
+        Minimum fraction of optimal flux for metabolic task reactions during pruning
+        Default is 0.01
     exclude : list
         List of reaction ID strings for forced exclusion from final model
     gpr : bool
@@ -599,7 +602,7 @@ def _screen_tasks(model, tasks, silent):
 # Create context-specific model based on transcript distribution
 def contextualize(model, transcriptome = 'none', samples = 1000, silent = False, prune = True,
     fraction = 0.8, minimum = False, conservative = False, objective = True, additive = False, direct = False,
-    set_bounds = True, tasks = [], exclude = [], gpr = False, threshold = 1e-6, phase=1):
+    set_bounds = True, tasks = [], task_frac = 0.01, exclude = [], gpr = False, threshold = 1e-6, phase=1):
 
     '''Reaction Inclusion by Parsimony and Transcriptomic Distribution or RIPTiDe
     
@@ -649,6 +652,10 @@ def contextualize(model, transcriptome = 'none', samples = 1000, silent = False,
         fraction = 0.01
     elif fraction >= 1.0: 
         fraction = 0.99
+    if task_frac <= 0.0: 
+        task_frac = 0.01
+    elif task_frac >= 1.0: 
+        task_frac = 0.01
     if minimum != False:
         if minimum <= 0.0: 
             minimum = 0.0001
@@ -756,7 +763,7 @@ def contextualize(model, transcriptome = 'none', samples = 1000, silent = False,
         rm_rxns = rm_rxns.difference(active_rxns)
         if len(screened_tasks) >= 1:
             for task in screened_tasks:
-                active_rxns = _constrain_for_pruning(model=model, min_coefficients=min_coefficient_dict, fraction=0.01,
+                active_rxns = _constrain_for_pruning(model=model, min_coefficients=min_coefficient_dict, fraction=task_frac,
                                                      objective=task, minimum_flux=minimum_threshold, silent=silent)
                 rm_rxns = rm_rxns.difference(active_rxns)
         riptide_object.minimization_coefficients = all_min_coefficient_dict

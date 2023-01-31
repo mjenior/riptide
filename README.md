@@ -2,7 +2,7 @@
 
 **R**eaction **I**nclusion by **P**arsimony and **T**ranscript **D**istribution
 
-v3.4.57
+v3.4.58
 
 Transcriptomic analyses of bacteria have become instrumental to our understanding of their responses to changes in their environment. While traditional analyses have been informative, leveraging these datasets within genome-scale metabolic network reconstructions (GENREs) can provide greatly improved context for shifts in pathway utilization and downstream/upstream ramifications for changes in metabolic regulation. Many previous techniques for GENRE transcript integration have focused on creating maximum consensus with input datasets, but these approaches have been shown to generate less accurate metabolic predictions than a transcript-agnostic method of flux minimization (pFBA), which identifies the most efficient/economic patterns of metabolism given certain growth constraints. Despite this success, growth conditions are not always easily quantifiable and highlights the need for novel platforms that build from these findings. This method, known as RIPTiDe, combines these concepts and utilizes overall minimization of flux weighted by transcriptomic analysis to identify the most energy efficient pathways to achieve growth that include more highly transcribed enzymes, without previous insight into extracellular conditions. This platform could be important for revealing context-specific bacterial phenotypes in line with governing principles of adaptive evolution, that drive disease manifestation or interactions between microbes.
 
@@ -111,9 +111,6 @@ objective : bool
 additive : bool
     Pool transcription abundances for reactions with multiple contributing gene products
     Default is False
-important : list
-    List of gene or reaction ID strings for which the highest weights are assigned regardless of transcription
-    Default is False
 direct : bool
     Assigns both minimization and maximization step coefficents directly, instead of relying on abundance distribution
     Default is False
@@ -122,6 +119,9 @@ set_bounds : bool
     Default is True
 tasks : list
     List of gene or reaction ID strings for forced inclusion in final model (metabolic tasks or essential genes)
+task_frac : float
+    Minimum fraction of optimal flux for metabolic task reactions during pruning
+    Default is 0.01
 exclude : list
     List of reaction ID strings for forced exclusion from final model
 gpr : bool

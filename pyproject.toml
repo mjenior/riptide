@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "riptide"
-version = "3.4.57"
+version = "3.4.58"
 authors = [
   { name="Matthew Jenior", email="mattjenior@gmail.com" },
 ]
