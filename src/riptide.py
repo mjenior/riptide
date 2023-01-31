@@ -341,10 +341,10 @@ def _rarefy(abunds, n):
 
 
 # Simplified to run in parallel
-def multi_contextualize(args, frac):
+def _multi_contextualize(args, frac):
     current_fit = contextualize(model=args['model'], transcriptome=args['transcriptome'], fraction=frac, samples=args['samples'], 
                          minimum=args['minimum'], conservative=args['conservative'], objective=args['objective'], 
-                         additive=args['additive'], set_bounds=args['set_bounds'], 
+                         additive=args['additive'], set_bounds=args['set_bounds'], task_frac=args['task_frac'],
                          tasks=args['tasks'], exclude=args['exclude'], gpr=args['gpr'], threshold=args['threshold'], 
                          phase=2, silent=True)
 
@@ -367,7 +367,7 @@ def _find_best_fit(frac_range, argDict, prev_best=None):
     if argDict['silent'] == False: sys.stdout.write('\rProgress: 0%')
 
     maxfit_report = {}
-    best_fit = multi_contextualize(argDict, frac_range[0])
+    best_fit = _multi_contextualize(argDict, frac_range[0])
     maxfit_report[best_fit.fraction_of_optimum] = best_fit.concordance
     
     progress += increment
@@ -383,7 +383,7 @@ def _find_best_fit(frac_range, argDict, prev_best=None):
     improvement = False
     for frac in frac_range[1:]:
         try:
-            fit = multi_contextualize(argDict, frac)
+            fit = _multi_contextualize(argDict, frac)
         except:
             progress += increment
             if argDict['silent'] == False: sys.stdout.write('\rProgress: ' + str(float("%.2f" % progress)) + '%        ')
@@ -528,7 +528,7 @@ def maxfit(model, transcriptome = 'none', frac_min = 0.1, frac_max = 0.9, frac_s
         print('Running max fit RIPTiDe for objective fraction range:', frac_min, 'to', frac_max, '...')
 
     argDict = {'model':model, 'transcriptome':transcriptome, 'silent':silent, 
-               'samples':samples, 'minimum':minimum, 
+               'samples':samples, 'minimum':minimum, 'task_frac':task_frac,
                'conservative':conservative, 'objective':objective, 'additive':additive, 
                'set_bounds':set_bounds, 'tasks':tasks, 'exclude':exclude, 
                'gpr':gpr, 'threshold':threshold, 'phase':2}
