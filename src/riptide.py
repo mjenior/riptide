@@ -407,10 +407,10 @@ def _find_best_fit(frac_range, argDict, prev_best=None):
                 sys.stdout.write('\rProgress: ' + str(float("%.2f" % progress)) + '%  -  improved fit identified        ')
 
     if argDict['silent'] == False:
-        if improvement == False:
+        if improvement == False and improved == 0:
             sys.stdout.write('\rProgress: 100%                          \n\n')
             sys.stdout.flush()
-        elif improved == 0 or prev_best == None:
+        elif improved == 0:
             sys.stdout.write('\rProgress: ' + str(float("%.2f" % progress)) + '%  -  fit identified        \n\n')
         else:
             sys.stdout.write('\rProgress: 100%  -  improved fit identified        \n\n')
