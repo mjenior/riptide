@@ -9,6 +9,7 @@ import pandas
 import warnings
 from random import seed
 from copy import deepcopy
+from datetime import datetime
 
 import cobra
 import symengine
@@ -68,8 +69,9 @@ def save_output(riptide_obj='NULL', path='NULL', file_type='JSON', silent=False)
     if path == 'NULL':
         if silent == False:
             print('WARNING: Did not provide an output directory. Using default riptide_files in working directory')
-        path = 'riptide_files'
+        path = riptide_obj.model.id + '_' + riptide_obj.run_start
     try:
+        path = path + '_' + riptide_obj.run_start
         os.mkdir(path)
     except:
         if silent == False:
@@ -357,10 +359,11 @@ def _find_best_fit(frac_range, argDict, prev_best=None):
     progress = 0.0
 
     if prev_best == None:
+        best_fit_concordance = 0.
         if argDict['silent'] == False:
             print('Analyzing context-specific subnetwork flux ranges...')
     else:
-        best_fit = prev_best
+        best_fit_concordance = prev_best.concordance
         if argDict['silent'] == False:
             print('Testing local objective fractions to ' + str(best_fit.fraction_of_optimum) + '...')
 
@@ -371,22 +374,23 @@ def _find_best_fit(frac_range, argDict, prev_best=None):
     maxfit_report[best_fit.fraction_of_optimum] = best_fit.concordance
     
     progress += increment
+    improved = 0
     if isinstance(best_fit.concordance, str) != True:
         best_fit_concordance = 0.
-        improved = 0
-        if argDict['silent'] == False: sys.stdout.write('\rProgress: ' + str(float("%.2f" % progress)) + '%        ')
-    else:
-        improved = 1
-        if argDict['silent'] == False: sys.stdout.write('\rProgress: ' + str(float("%.2f" % progress)) + '%  -  fit identified        ')
+        if argDict['silent'] == False: sys.stdout.write('\rProgress: ' + str(float("%.2f" % progress)) + '%          ')
+    elif best_fit.concordance['r'] > best_fit_concordance:
+        best_fit_concordance = best_fit.concordance
+        improved += 1
+        if argDict['silent'] == False: sys.stdout.write('\rProgress: ' + str(float("%.2f" % progress)) + '%  -  improved fit identified (' + str(improved) + ')          ')
     
     # Identify best fit of flux sample to transcriptome
-    improvement = False
     for frac in frac_range[1:]:
         try:
             fit = _multi_contextualize(argDict, frac)
+            improvement = False
         except:
             progress += increment
-            if argDict['silent'] == False: sys.stdout.write('\rProgress: ' + str(float("%.2f" % progress)) + '%        ')
+            if argDict['silent'] == False: sys.stdout.write('\rProgress: ' + str(float("%.2f" % progress)) + '%          ')
             continue
             
         maxfit_report[fit.fraction_of_optimum] = fit.concordance
@@ -399,22 +403,28 @@ def _find_best_fit(frac_range, argDict, prev_best=None):
         progress += increment
         if argDict['silent'] == False:
             if improvement == False:
-                sys.stdout.write('\rProgress: ' + str(float("%.2f" % progress)) + '%        ')
-            elif improved == 0 or prev_best == None:
+                if argDict['silent'] == False: sys.stdout.write('\rProgress: ' + str(float("%.2f" % progress)) + '%          ')
+            elif improved == 0 and prev_best == None:
                 improved += 1
-                sys.stdout.write('\rProgress: ' + str(float("%.2f" % progress)) + '%  -  fit identified        ')
+                if argDict['silent'] == False: sys.stdout.write('\rProgress: ' + str(float("%.2f" % progress)) + '%  -  fit identified          ')
             else:
-                sys.stdout.write('\rProgress: ' + str(float("%.2f" % progress)) + '%  -  improved fit identified        ')
+                improved += 1
+                if argDict['silent'] == False: sys.stdout.write('\rProgress: ' + str(float("%.2f" % progress)) + '%  -  improved fit identified (' + str(improved) + ')          ')
 
     if argDict['silent'] == False:
         if improvement == False and improved == 0:
-            sys.stdout.write('\rProgress: 100%                          \n\n')
-            sys.stdout.flush()
-        elif improved == 0:
-            sys.stdout.write('\rProgress: ' + str(float("%.2f" % progress)) + '%  -  fit identified        \n\n')
+            if argDict['silent'] == False: 
+                sys.stdout.write('\rProgress: 100%          \n\n')
+                sys.stdout.flush()
+        elif improved == 0 and prev_best == None:
+            if argDict['silent'] == False:
+                sys.stdout.write('\rProgress: 100%  -  fit identified          \n\n')
+                sys.stdout.flush()
         else:
-            sys.stdout.write('\rProgress: 100%  -  improved fit identified        \n\n')
-            sys.stdout.flush()
+            improved += 1
+            if argDict['silent'] == False: 
+                sys.stdout.write('\rProgress: 100%  -  improved fit identified (' + str(improved) + ')          \n\n')
+                sys.stdout.flush()
 
     best_fit.maxfit_report = maxfit_report
 
@@ -492,6 +502,7 @@ def maxfit(model, transcriptome = 'none', frac_min = 0.1, frac_max = 0.9, frac_s
     '''
 
     iter_start = time.time()
+    curr_run = str(datetime.now()).replace(' ','_').split('.')[0]
     seed(937162211)
 
     if samples <= 100:
@@ -567,6 +578,7 @@ def maxfit(model, transcriptome = 'none', frac_min = 0.1, frac_max = 0.9, frac_s
     report_dict = _operation_report(iter_start, model, top_fit.model, top_fit.concordance, silent, phase=1)
     top_fit.additional_parameters['operation'] = report_dict
     top_fit.maxfit = True
+    top_fit.run_start = curr_run
 
     return top_fit
 
@@ -629,6 +641,10 @@ def contextualize(model, transcriptome = 'none', samples = 1000, silent = False,
     '''
 
     start_time = time.time()
+    riptide_object.start_time = str(start_time)
+    curr_run = str(datetime.now()).replace(' ','_').split('.')[0]
+    riptide_object.run_start = curr_run
+    
     seed(937162211)
 
     if _test_exchange_space(model, minimum=1e5):
@@ -1042,7 +1058,10 @@ def _calc_concordance(flux_samples, coefficient_dict):
 def _prune_model(model, rm_rxns, conserve):
     
     new_model = deepcopy(model)
-    new_model.id = str(new_model.id) + '_riptide'
+    if str(new_model.id).strip() == '':
+        new_model.id = 'model_riptide'
+    else:
+        new_model.id = str(new_model.id) + '_riptide'
     
     # Parse elements highlighted for pruning based on GPRs
     if conserve == True:
