@@ -365,7 +365,7 @@ def _find_best_fit(frac_range, argDict, prev_best=None):
     else:
         best_fit_concordance = prev_best.concordance
         if argDict['silent'] == False:
-            print('Testing local objective fractions to ' + str(best_fit.fraction_of_optimum) + '...')
+            print('Testing local objective fractions to ' + str(prev_best.fraction_of_optimum) + '...')
 
     if argDict['silent'] == False: sys.stdout.write('\rProgress: 0%')
 
@@ -377,12 +377,14 @@ def _find_best_fit(frac_range, argDict, prev_best=None):
     improved = 0
     if isinstance(best_fit.concordance, str) != True:
         best_fit_concordance = 0.
-        if argDict['silent'] == False: sys.stdout.write('\rProgress: ' + str(float("%.2f" % progress)) + '%          ')
+        if argDict['silent'] == False: sys.stdout.write('\rProgress: ' + str(float("%.2f" % progress)) + '%')
     elif best_fit.concordance['r'] > best_fit_concordance:
         best_fit_concordance = best_fit.concordance
         improved += 1
         if argDict['silent'] == False: sys.stdout.write('\rProgress: ' + str(float("%.2f" % progress)) + '%  -  improved fit identified (' + str(improved) + ')          ')
-    
+    else:
+        if argDict['silent'] == False: sys.stdout.write('\rProgress: ' + str(float("%.2f" % progress)) + '%')
+        
     # Identify best fit of flux sample to transcriptome
     for frac in frac_range[1:]:
         try:
@@ -390,7 +392,6 @@ def _find_best_fit(frac_range, argDict, prev_best=None):
             improvement = False
         except:
             progress += increment
-            if argDict['silent'] == False: sys.stdout.write('\rProgress: ' + str(float("%.2f" % progress)) + '%          ')
             continue
             
         maxfit_report[fit.fraction_of_optimum] = fit.concordance
