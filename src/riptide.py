@@ -346,7 +346,7 @@ def _rarefy(abunds, n):
 def _multi_contextualize(args, frac):
     current_fit = contextualize(model=args['model'], transcriptome=args['transcriptome'], fraction=frac, samples=args['samples'], 
                          minimum=args['minimum'], conservative=args['conservative'], objective=args['objective'], 
-                         additive=args['additive'], set_bounds=args['set_bounds'], task_frac=args['task_frac'],
+                         additive=args['additive'], set_bounds=args['set_bounds'], task_lb=args['task_lb'],
                          tasks=args['tasks'], exclude=args['exclude'], gpr=args['gpr'], threshold=args['threshold'], 
                          phase=2, silent=True)
 
@@ -381,17 +381,19 @@ def _find_best_fit(frac_range, argDict, prev_best=None):
     elif best_fit.concordance['r'] > best_fit_concordance:
         best_fit_concordance = best_fit.concordance
         improved += 1
-        if argDict['silent'] == False: sys.stdout.write('\rProgress: ' + str(float("%.2f" % progress)) + '%  -  improved fit identified (' + str(improved) + ')          ')
+        if argDict['silent'] == False: sys.stdout.write('\rProgress: ' + str(float("%.2f" % progress)) + '%  -  improved fit identified (' + str(improved) + ') ')
     else:
         if argDict['silent'] == False: sys.stdout.write('\rProgress: ' + str(float("%.2f" % progress)) + '%')
         
     # Identify best fit of flux sample to transcriptome
     for frac in frac_range[1:]:
+        improvement = False
         try:
             fit = _multi_contextualize(argDict, frac)
-            improvement = False
         except:
             progress += increment
+            if argDict['silent'] == False:
+                sys.stdout.write('\rProgress: ' + str(float("%.2f" % progress)) + '% ')
             continue
             
         maxfit_report[fit.fraction_of_optimum] = fit.concordance
@@ -403,29 +405,26 @@ def _find_best_fit(frac_range, argDict, prev_best=None):
         
         progress += increment
         if argDict['silent'] == False:
-            if improvement == False:
-                if argDict['silent'] == False: sys.stdout.write('\rProgress: ' + str(float("%.2f" % progress)) + '%          ')
+            if improvement == False and improved == 0:
+                sys.stdout.write('\rProgress: ' + str(float("%.2f" % progress)) + '% ')
             elif improved == 0 and prev_best == None:
                 improved += 1
-                if argDict['silent'] == False: sys.stdout.write('\rProgress: ' + str(float("%.2f" % progress)) + '%  -  fit identified          ')
+                sys.stdout.write('\rProgress: ' + str(float("%.2f" % progress)) + '%  -  fit identified                     ')
             else:
                 improved += 1
-                if argDict['silent'] == False: sys.stdout.write('\rProgress: ' + str(float("%.2f" % progress)) + '%  -  improved fit identified (' + str(improved) + ')          ')
+                sys.stdout.write('\rProgress: ' + str(float("%.2f" % progress)) + '%  -  improved fit identified (' + str(improved) + ') ')
 
     if argDict['silent'] == False:
         if improvement == False and improved == 0:
-            if argDict['silent'] == False: 
-                sys.stdout.write('\rProgress: 100%          \n\n')
-                sys.stdout.flush()
+            sys.stdout.write('\rProgress: 100% \n\n')
+            sys.stdout.flush()
         elif improved == 0 and prev_best == None:
-            if argDict['silent'] == False:
-                sys.stdout.write('\rProgress: 100%  -  fit identified          \n\n')
-                sys.stdout.flush()
+            sys.stdout.write('\rProgress: 100%  -  fit identified                       \n\n')
+            sys.stdout.flush()
         else:
             improved += 1
-            if argDict['silent'] == False: 
-                sys.stdout.write('\rProgress: 100%  -  improved fit identified (' + str(improved) + ')          \n\n')
-                sys.stdout.flush()
+            sys.stdout.write('\rProgress: 100%  -  improved fit identified (' + str(improved) + ') \n\n')
+            sys.stdout.flush()
 
     best_fit.maxfit_report = maxfit_report
 
@@ -435,7 +434,7 @@ def _find_best_fit(frac_range, argDict, prev_best=None):
 # Iteratively run RIPTiDe over a range of objective minimum fractions
 def maxfit(model, transcriptome = 'none', frac_min = 0.1, frac_max = 0.9, frac_step = 0.1, prune = True,
     samples = 1000, minimum = False, conservative = False, objective = True, additive = False, 
-    set_bounds = True, silent = False, tasks = [], task_frac = 0.01, exclude = [], gpr = False, threshold = 1e-6):
+    set_bounds = True, silent = False, tasks = [], task_lb = 0., exclude = [], gpr = False, threshold = 1e-6):
 
     '''
     Iterative RIPTiDe for a range of minimum objective fluxes, returns model with best correlation 
@@ -489,9 +488,9 @@ def maxfit(model, transcriptome = 'none', frac_min = 0.1, frac_max = 0.9, frac_s
         Default is True
     tasks : list
         List of gene or reaction ID strings for forced inclusion in final model (metabolic tasks or essential genes)
-    task_frac : float
-        Minimum fraction of optimal flux for metabolic task reactions during pruning
-        Default is 0.01
+    task_lb : float
+        Minimum flux bound for metabolic task reactions during pruning
+        Default is equal to threshold var
     exclude : list
         List of reaction ID strings for forced exclusion from final model
     gpr : bool
@@ -531,6 +530,11 @@ def maxfit(model, transcriptome = 'none', frac_min = 0.1, frac_max = 0.9, frac_s
             print('WARNING: Improper maximum fraction provided, setting to default value')
         frac_max = 0.85
 
+    if threshold+1e-6 < 1e-6:
+        threshold = abs(threshold)
+    if task_lb <= 0.:
+        task_lb = threshold
+
     frac_range = [round(x, 3) for x in list(numpy.arange(frac_min, frac_max+frac_step, frac_step))]
     if len(frac_range) == 1:
         if silent == False:
@@ -540,7 +544,7 @@ def maxfit(model, transcriptome = 'none', frac_min = 0.1, frac_max = 0.9, frac_s
         print('Running max fit RIPTiDe for objective fraction range:', frac_min, 'to', frac_max, '...')
 
     argDict = {'model':model, 'transcriptome':transcriptome, 'silent':silent, 
-               'samples':samples, 'minimum':minimum, 'task_frac':task_frac,
+               'samples':samples, 'minimum':minimum, 'task_lb':task_lb,
                'conservative':conservative, 'objective':objective, 'additive':additive, 
                'set_bounds':set_bounds, 'tasks':tasks, 'exclude':exclude, 
                'gpr':gpr, 'threshold':threshold, 'phase':2}
@@ -615,7 +619,7 @@ def _screen_tasks(model, tasks, silent):
 # Create context-specific model based on transcript distribution
 def contextualize(model, transcriptome = 'none', samples = 1000, silent = False, prune = True,
     fraction = 0.8, minimum = False, conservative = False, objective = True, additive = False, direct = False,
-    set_bounds = True, tasks = [], task_frac = 0.01, exclude = [], gpr = False, threshold = 1e-6, phase=1):
+    set_bounds = True, tasks = [], task_lb = 0., exclude = [], gpr = False, threshold = 1e-6, phase=1):
 
     '''Reaction Inclusion by Parsimony and Transcriptomic Distribution or RIPTiDe
     
@@ -669,10 +673,10 @@ def contextualize(model, transcriptome = 'none', samples = 1000, silent = False,
         fraction = 0.01
     elif fraction >= 1.0: 
         fraction = 0.99
-    if task_frac <= 0.0: 
-        task_frac = 0.01
-    elif task_frac >= 1.0: 
-        task_frac = 0.01
+    if threshold+1e-6 < 1e-6:
+        threshold = abs(threshold)
+    if task_lb <= 0.:
+        task_lb = threshold
     if minimum != False:
         if minimum <= 0.0: 
             minimum = 0.0001
@@ -780,8 +784,8 @@ def contextualize(model, transcriptome = 'none', samples = 1000, silent = False,
         rm_rxns = rm_rxns.difference(active_rxns)
         if len(screened_tasks) >= 1:
             for task in screened_tasks:
-                active_rxns = _constrain_for_pruning(model=model, min_coefficients=min_coefficient_dict, fraction=task_frac,
-                                                     objective=task, minimum_flux=minimum_threshold, silent=silent)
+                active_rxns = _constrain_for_pruning(model=model, min_coefficients=min_coefficient_dict, fraction=0.,
+                                                     objective=task, minimum_flux=task_lb, silent=silent)
                 rm_rxns = rm_rxns.difference(active_rxns)
         riptide_object.minimization_coefficients = all_min_coefficient_dict
                 
@@ -951,13 +955,14 @@ def _constrain_task(model, task, frac, min_val, silent):
     model.objective.direction = 'max'
     
     task_name = task + '_constraint'
-    task_bound1 = model.slim_optimize(error_value=0.)
-    if silent == False and task_bound1 <= min_val:
+    task_bound = model.slim_optimize(error_value=0.)
+    if silent == False and task_bound <= min_val:
         print('WARNING:', task, 'minimum flux infeasible')
         task_bounds = [model.reactions.get_by_id(task).lower_bound, model.reactions.get_by_id(task).upper_bound]
+    elif frac == 0.:
+        task_bounds = [task_bound, min_val]
     else:
-        task_bound2 = task_bound1 * frac
-        task_bounds = [task_bound1, task_bound2]
+        task_bounds = [task_bound, task_bound * frac]
     task_expression = model.reactions.get_by_id(task).flux_expression
     task_constraint = model.problem.Constraint(task_expression, name=task_name, ub=max(task_bounds), lb=min(task_bounds))
     model.add_cons_vars(task_constraint)
