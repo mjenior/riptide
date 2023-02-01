@@ -502,7 +502,7 @@ def maxfit(model, transcriptome = 'none', frac_min = 0.1, frac_max = 0.9, frac_s
     '''
 
     iter_start = time.time()
-    curr_run = str(datetime.now()).replace(' ','_').split('.')[0]
+    curr_run = str(datetime.now()).replace(' ','_').replace('-','').replace(':','').split('.')[0].replace(' ','_')
     seed(937162211)
 
     if samples <= 100:
@@ -646,7 +646,7 @@ def contextualize(model, transcriptome = 'none', samples = 1000, silent = False,
     '''
 
     start_time = time.time()
-    curr_run = str(datetime.now()).replace(' ','_').split('.')[0]
+    curr_run = str(datetime.now()).replace(' ','_').replace('-','').replace(':','').split('.')[0]
     
     seed(937162211)
 
