@@ -641,9 +641,7 @@ def contextualize(model, transcriptome = 'none', samples = 1000, silent = False,
     '''
 
     start_time = time.time()
-    riptide_object.start_time = str(start_time)
     curr_run = str(datetime.now()).replace(' ','_').split('.')[0]
-    riptide_object.run_start = curr_run
     
     seed(937162211)
 
@@ -658,6 +656,8 @@ def contextualize(model, transcriptome = 'none', samples = 1000, silent = False,
     riptide_object.additional_parameters['objective'] = objective
     riptide_object.additional_parameters['additive'] = additive
     riptide_object.additional_parameters['set_bounds'] = set_bounds
+    riptide_object.start_time = str(start_time)
+    riptide_object.run_start = curr_run
 
     # Correct some possible user error
     samples = int(samples)
