@@ -375,7 +375,7 @@ def _find_best_fit(frac_range, argDict, prev_best=None):
     
     progress += increment
     improved = 0
-    if isinstance(best_fit.concordance, str) != True:
+    if isinstance(best_fit.concordance, str) == True:
         best_fit_concordance = 0.
         if argDict['silent'] == False: sys.stdout.write('\rProgress: ' + str(float("%.2f" % progress)) + '%')
     elif best_fit.concordance['r'] > best_fit_concordance:
@@ -425,6 +425,19 @@ def _find_best_fit(frac_range, argDict, prev_best=None):
             improved += 1
             sys.stdout.write('\rProgress: 100%  -  improved fit identified (' + str(improved) + ') \n\n')
             sys.stdout.flush()
+    
+    # Check if metabolic tasks can carry flux in the best fit model
+    if argDict['silent'] == False and len(argDict['tasks']) >= 1:
+        obj_ID = str(best_fit.model.objective.expression).split()[0].split('*')[-1]
+        failed = 0
+        for task in argDict['tasks']:
+            best_fit.model.objective = task
+            task_flux = best_fit.model.slim_optimize(error_value=0.)
+            if task_flux <= argDict['threshold']:
+                print('WARNING:', task, 'carries no flux in best fitting model')
+                failed += 1
+        best_fit.model.objective = obj_ID
+        if failed >= 1: print('\n')
 
     best_fit.maxfit_report = maxfit_report
 
@@ -533,6 +546,8 @@ def maxfit(model, transcriptome = 'none', frac_min = 0.1, frac_max = 0.9, frac_s
     if threshold+1e-6 < 1e-6:
         threshold = abs(threshold)
 
+    if len(tasks) >= 1:
+        screened_tasks = _screen_tasks(model, tasks, silent)
     if task_frac <= 0. or task_frac > 1.:
         task_frac = 0.01
 
@@ -547,7 +562,7 @@ def maxfit(model, transcriptome = 'none', frac_min = 0.1, frac_max = 0.9, frac_s
     argDict = {'model':model, 'transcriptome':transcriptome, 'silent':silent, 
                'samples':samples, 'minimum':minimum, 'task_frac':task_frac,
                'conservative':conservative, 'objective':objective, 'additive':additive, 
-               'set_bounds':set_bounds, 'tasks':tasks, 'exclude':exclude, 
+               'set_bounds':set_bounds, 'tasks':screened_tasks, 'exclude':exclude, 
                'gpr':gpr, 'threshold':threshold, 'phase':2}
     
     warnings.filterwarnings('ignore', category=UserWarning)
@@ -1038,7 +1053,6 @@ def _constrain_for_sampling(model, max_coefficients, sampling_depth, objective, 
         flux_samples = _gapsplit(constrained_model, depth=sampling_depth)
         concordance = _calc_concordance(flux_samples, max_coefficients)
     except:
-        print('WARNING: Flux sampling not completed with given constraints.')
         flux_samples = 'Not performed'
         concordance = 'Not performed'
 
