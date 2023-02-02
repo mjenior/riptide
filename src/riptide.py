@@ -375,11 +375,11 @@ def _find_best_fit(frac_range, argDict, prev_best=None):
     
     progress += increment
     improved = 0
+    best_fit_concordance = 0.
     if isinstance(best_fit.concordance, str) == True:
-        best_fit_concordance = 0.
         if argDict['silent'] == False: sys.stdout.write('\rProgress: ' + str(float("%.2f" % progress)) + '%')
     elif best_fit.concordance['r'] > best_fit_concordance:
-        best_fit_concordance = best_fit.concordance
+        best_fit_concordance = best_fit.concordance['r']
         improved += 1
         if argDict['silent'] == False: sys.stdout.write('\rProgress: ' + str(float("%.2f" % progress)) + '%  -  improved fit identified (' + str(improved) + ') ')
     else:
