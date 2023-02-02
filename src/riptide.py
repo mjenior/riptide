@@ -346,7 +346,7 @@ def _rarefy(abunds, n):
 def _multi_contextualize(args, frac):
     current_fit = contextualize(model=args['model'], transcriptome=args['transcriptome'], fraction=frac, samples=args['samples'], 
                          minimum=args['minimum'], conservative=args['conservative'], objective=args['objective'], 
-                         additive=args['additive'], set_bounds=args['set_bounds'], task_lb=args['task_lb'],
+                         additive=args['additive'], set_bounds=args['set_bounds'], task_frac=args['task_frac'],
                          tasks=args['tasks'], exclude=args['exclude'], gpr=args['gpr'], threshold=args['threshold'], 
                          phase=2, silent=True)
 
@@ -434,7 +434,7 @@ def _find_best_fit(frac_range, argDict, prev_best=None):
 # Iteratively run RIPTiDe over a range of objective minimum fractions
 def maxfit(model, transcriptome = 'none', frac_min = 0.1, frac_max = 0.9, frac_step = 0.1, prune = True,
     samples = 1000, minimum = False, conservative = False, objective = True, additive = False, 
-    set_bounds = True, silent = False, tasks = [], task_lb = 0., exclude = [], gpr = False, threshold = 1e-6):
+    set_bounds = True, silent = False, tasks = [], task_frac = 0.01, exclude = [], gpr = False, threshold = 1e-8):
 
     '''
     Iterative RIPTiDe for a range of minimum objective fluxes, returns model with best correlation 
@@ -488,9 +488,9 @@ def maxfit(model, transcriptome = 'none', frac_min = 0.1, frac_max = 0.9, frac_s
         Default is True
     tasks : list
         List of gene or reaction ID strings for forced inclusion in final model (metabolic tasks or essential genes)
-    task_lb : float
-        Minimum flux bound for metabolic task reactions during pruning
-        Default is equal to threshold var
+    task_frac : float
+        Minimum fraction of optimal flux for metabolic task reactions given preceeding constraints
+        Default is 0.01
     exclude : list
         List of reaction ID strings for forced exclusion from final model
     gpr : bool
@@ -498,7 +498,7 @@ def maxfit(model, transcriptome = 'none', frac_min = 0.1, frac_max = 0.9, frac_s
         Default is False
     threshold : float
         Minimum flux a reaction must acheive in order to avoid pruning during flux sum minimization step
-        Default is 1e-5
+        Default is 1e-8
     '''
 
     iter_start = time.time()
@@ -532,8 +532,9 @@ def maxfit(model, transcriptome = 'none', frac_min = 0.1, frac_max = 0.9, frac_s
 
     if threshold+1e-6 < 1e-6:
         threshold = abs(threshold)
-    if task_lb <= 0.:
-        task_lb = threshold
+
+    if task_frac <= 0. or task_frac > 1.:
+        task_frac = 0.01
 
     frac_range = [round(x, 3) for x in list(numpy.arange(frac_min, frac_max+frac_step, frac_step))]
     if len(frac_range) == 1:
@@ -544,7 +545,7 @@ def maxfit(model, transcriptome = 'none', frac_min = 0.1, frac_max = 0.9, frac_s
         print('Running max fit RIPTiDe for objective fraction range:', frac_min, 'to', frac_max, '...')
 
     argDict = {'model':model, 'transcriptome':transcriptome, 'silent':silent, 
-               'samples':samples, 'minimum':minimum, 'task_lb':task_lb,
+               'samples':samples, 'minimum':minimum, 'task_frac':task_frac,
                'conservative':conservative, 'objective':objective, 'additive':additive, 
                'set_bounds':set_bounds, 'tasks':tasks, 'exclude':exclude, 
                'gpr':gpr, 'threshold':threshold, 'phase':2}
@@ -619,7 +620,7 @@ def _screen_tasks(model, tasks, silent):
 # Create context-specific model based on transcript distribution
 def contextualize(model, transcriptome = 'none', samples = 1000, silent = False, prune = True,
     fraction = 0.8, minimum = False, conservative = False, objective = True, additive = False, direct = False,
-    set_bounds = True, tasks = [], task_lb = 0., exclude = [], gpr = False, threshold = 1e-6, phase=1):
+    set_bounds = True, tasks = [], task_frac = 0.01, exclude = [], gpr = False, threshold = 1e-8, phase=1):
 
     '''Reaction Inclusion by Parsimony and Transcriptomic Distribution or RIPTiDe
     
@@ -675,8 +676,8 @@ def contextualize(model, transcriptome = 'none', samples = 1000, silent = False,
         fraction = 0.99
     if threshold+1e-6 < 1e-6:
         threshold = abs(threshold)
-    if task_lb <= 0.:
-        task_lb = threshold
+    if task_frac <= 0. or task_frac > 1. or task_frac > fraction:
+        task_frac = fraction
     if minimum != False:
         if minimum <= 0.0: 
             minimum = 0.0001
@@ -726,7 +727,6 @@ def contextualize(model, transcriptome = 'none', samples = 1000, silent = False,
     
     # Define linear coefficients for both steps
     rxn_transcriptome, gene_hits = _transcript_to_reactions(transcriptome, model, gpr, additive)
-    rm_rxns = set([x.id for x in model.reactions])
     all_min_coefficient_dict = {}
     all_max_coefficient_dict = {}
     riptide_object.percent_of_mapping = gene_hits
@@ -734,6 +734,8 @@ def contextualize(model, transcriptome = 'none', samples = 1000, silent = False,
     if silent == False:
         if phase == 1:
             print('Pruning zero flux subnetworks...')
+            
+    inactive_rxns = set(exclude)
     for x in range(0, transcriptome['replicates']):
         current_rxn_transcriptome = {}
         for index in rxn_transcriptome.keys():
@@ -767,36 +769,30 @@ def contextualize(model, transcriptome = 'none', samples = 1000, silent = False,
             screened_tasks = _screen_tasks(model, tasks, silent)
             riptide_object.metabolic_tasks = screened_tasks
             for task in screened_tasks:
-                min_coefficient_dict[objective] = min_coefficient
-                max_coefficient_dict[objective] = max_coefficient
+                min_coefficient_dict[task] = min_coefficient
+                max_coefficient_dict[task] = max_coefficient
                 try:
-                    all_min_coefficient_dict[objective].append(min_coefficient_dict[objective])
-                    all_max_coefficient_dict[objective].append(max_coefficient_dict[objective])
+                    all_min_coefficient_dict[task].append(min_coefficient_dict[task])
+                    all_max_coefficient_dict[task].append(max_coefficient_dict[task])
                 except KeyError:
-                    all_min_coefficient_dict[objective] = [min_coefficient_dict[objective]]
-                    all_max_coefficient_dict[objective] = [max_coefficient_dict[objective]]
+                    all_min_coefficient_dict[task] = [min_coefficient_dict[task]]
+                    all_max_coefficient_dict[task] = [max_coefficient_dict[task]]
         else:
             screened_tasks = []
             
-        # Determine active network sections based on coefficients
-        active_rxns = _constrain_for_pruning(model=model, min_coefficients=min_coefficient_dict, fraction=fraction,
-                                             objective=objective, minimum_flux=minimum_threshold, silent=silent)
-        rm_rxns = rm_rxns.difference(active_rxns)
-        if len(screened_tasks) >= 1:
-            for task in screened_tasks:
-                active_rxns = _constrain_for_pruning(model=model, min_coefficients=min_coefficient_dict, fraction=0.,
-                                                     objective=task, minimum_flux=task_lb, silent=silent)
-                rm_rxns = rm_rxns.difference(active_rxns)
-        riptide_object.minimization_coefficients = all_min_coefficient_dict
-                
+        # Determine inactive network sections based on coefficients
+        inactive_rxns |= _constrain_for_pruning(model=model, min_coefficients=min_coefficient_dict, 
+                                             objective=objective, obj_fraction=fraction, tasks=screened_tasks, task_fraction=task_frac, 
+                                             minimum_flux=minimum_threshold, silent=silent)
+    
     # Prune inactive model components
-    rm_rxns = rm_rxns.union(set(exclude))
-    if len(rm_rxns) > 0 and prune == True:
-        riptide_model = _prune_model(model, rm_rxns, conservative)
+    riptide_object.minimization_coefficients = all_min_coefficient_dict
+    if len(inactive_rxns) > 0 and prune == True:
+        riptide_model = _prune_model(model, inactive_rxns, conservative)
         riptide_object.pruned = _record_pruned_elements(model, riptide_model)
     else:
         riptide_model = deepcopy(model)
-
+         
     # Find optimal solution space based on transcription and final constraints
     if silent == False:
         if phase == 1:
@@ -809,7 +805,8 @@ def contextualize(model, transcriptome = 'none', samples = 1000, silent = False,
 
     # Sample weighted flux distributions
     flux_samples, concordance = _constrain_for_sampling(model=riptide_model, max_coefficients=max_coefficient_dict, sampling_depth=samples,
-                                                       objective=objective, frac=fraction, minimum_flux=minimum_threshold, silent=silent)
+                                                        objective=objective, obj_frac=fraction,  tasks=screened_tasks, task_frac=task_frac, 
+                                                        min_flux=minimum_threshold,silent=silent)
     riptide_object.flux_samples = flux_samples
     riptide_object.concordance = concordance
         
@@ -949,20 +946,19 @@ def _assign_coefficients(rxn_transcript_dict, model, direct):
 
 
 # Constrain task minimum flux
-def _constrain_task(model, task, frac, min_val, silent):
+def _constrain_task(model, task, frac, min_flux, silent):
     
     model.objective = task
     model.objective.direction = 'max'
     
     task_name = task + '_constraint'
     task_bound = model.slim_optimize(error_value=0.)
-    if silent == False and task_bound <= min_val:
+    if silent == False and task_bound <= min_flux:
         print('WARNING:', task, 'minimum flux infeasible')
-        task_bounds = [model.reactions.get_by_id(task).lower_bound, model.reactions.get_by_id(task).upper_bound]
-    elif frac == 0.:
-        task_bounds = [task_bound, min_val]
+        task_bounds = [min_flux, model.reactions.get_by_id(task).upper_bound]
     else:
         task_bounds = [task_bound, task_bound * frac]
+        
     task_expression = model.reactions.get_by_id(task).flux_expression
     task_constraint = model.problem.Constraint(task_expression, name=task_name, ub=max(task_bounds), lb=min(task_bounds))
     model.add_cons_vars(task_constraint)
@@ -990,40 +986,50 @@ def _weighted_expression(model, coefficients={}):
 
 
 # Determine those reactions that carry flux in a pFBA objective set to a threshold of maximum
-def _constrain_for_pruning(model, min_coefficients, fraction, objective, minimum_flux, silent):
+def _constrain_for_pruning(model, min_coefficients, objective, obj_fraction, tasks, task_fraction, minimum_flux, silent):
     
     constrained_model = deepcopy(model)
     
     # Add objective/task constraints
+    min_coefficient = min(list(min_coefficients.values()))
     if isinstance(objective, str) == True:
-        min_coefficient = min(list(min_coefficients.values()))
         min_coefficients[objective] = min_coefficient
-        constrained_model = _constrain_task(constrained_model, objective, fraction, minimum_flux, silent)
-            
+        constrained_model = _constrain_task(constrained_model, objective, obj_fraction, minimum_flux, silent)
+
+    # metabolic task constraints
+    if len(tasks) >= 1:
+        for task in tasks:
+            min_coefficients[task] = min_coefficient
+            constrained_model = _constrain_task(constrained_model, task, task_fraction, minimum_flux, silent)
+    
     pruning_expr = _weighted_expression(model=constrained_model, coefficients=min_coefficients)
     constrained_model.objective = model.problem.Objective(pruning_expr, direction='min', sloppy=True)
     constrained_model.solver.update()
     
     constrained_fluxes = constrained_model.optimize().fluxes
-    active_rxns = set([rxn.id for rxn in constrained_model.reactions if abs(constrained_fluxes[rxn.id]) >= minimum_flux]) 
+    inactive_rxns = set([rxn.id for rxn in constrained_model.reactions if abs(constrained_fluxes[rxn.id]) == 0.]) 
     
-    return active_rxns
+    return inactive_rxns
 
 
 # Determine those reactions that carry flux in a pFBA objective set to a threshold of maximum
-def _constrain_for_sampling(model, max_coefficients, sampling_depth, objective, frac, minimum_flux, silent):
+def _constrain_for_sampling(model, max_coefficients, sampling_depth, objective, obj_frac, tasks, task_frac, min_flux, silent):
     
     constrained_model = deepcopy(model)
     
     # Apply weigths to new expression, allow deviation
     if isinstance(objective, str) == True:
-        constrained_model = _constrain_task(constrained_model, objective, frac, minimum_flux, silent)
+        constrained_model = _constrain_task(constrained_model, objective, obj_frac, min_flux, silent)
+    if len(tasks) >= 1:
+        for task in tasks:
+            constrained_model = _constrain_task(constrained_model, task, task_frac, min_flux, silent)
+
     sampling_expr = _weighted_expression(model=constrained_model, coefficients=max_coefficients)
     constrained_model.objective = model.problem.Objective(sampling_expr, direction='max', sloppy=True)
     constrained_model.solver.update()
     
     flux_sum = constrained_model.slim_optimize(error_value=0.)
-    flux_sum_constraint = constrained_model.problem.Constraint(sampling_expr, lb=flux_sum*0.01, ub=flux_sum)
+    flux_sum_constraint = constrained_model.problem.Constraint(sampling_expr, lb=min_flux, ub=flux_sum)
     model.add_cons_vars(flux_sum_constraint)
     constrained_model.solver.update()
     
@@ -1064,6 +1070,7 @@ def _calc_concordance(flux_samples, coefficient_dict):
 def _prune_model(model, rm_rxns, conserve):
     
     new_model = deepcopy(model)
+    
     if str(new_model.id).strip() == '':
         new_model.id = 'model_riptide'
     else:
@@ -1315,4 +1322,3 @@ def _maxgap(points, fva):
     target = left + width / 2.0
 
     return relative, target, width
-
