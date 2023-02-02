@@ -575,12 +575,13 @@ def maxfit(model, transcriptome = 'none', frac_min = 0.1, frac_max = 0.9, frac_s
             frac_step = round(frac_step / 2.0, 3)
             small_frac_range += [round(top_fit.fraction_of_optimum - frac_step, 3), round(top_fit.fraction_of_optimum + frac_step, 3)]
 
-        new_fit = _find_best_fit(list(set(small_frac_range)), argDict, top_fit)
-        if isinstance(new_fit.concordance, str) != True:
-            if new_fit.concordance['r'] > top_fit.concordance['r']:
-                top_fit = new_fit
-                for frac in new_fit.maxfit_report.keys():
-                     all_maxfit[frac] = new_fit.maxfit_report[frac]
+        if len(set(small_frac_range)) >= 1:
+            new_fit = _find_best_fit(list(set(small_frac_range)), argDict, top_fit)
+            if isinstance(new_fit.concordance, str) != True:
+                if new_fit.concordance['r'] > top_fit.concordance['r']:
+                    top_fit = new_fit
+                    for frac in new_fit.maxfit_report.keys():
+                        all_maxfit[frac] = new_fit.maxfit_report[frac]
     
     warnings.filterwarnings('default', category=UserWarning)
     top_fit.maxfit_report = all_maxfit
