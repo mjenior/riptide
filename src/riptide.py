@@ -61,8 +61,6 @@ def save_output(riptide_obj='NULL', path='NULL', file_type='JSON', silent=False)
         Default is False
     '''
 
-    warnings.filterwarnings('ignore', category=DeprecationWarning) # cobra/io/dict.py np.float 
-
     if riptide_obj == 'NULL':
         raise ValueError('ERROR: Did not provide a RIPTiDe object')
     
@@ -77,6 +75,9 @@ def save_output(riptide_obj='NULL', path='NULL', file_type='JSON', silent=False)
         if silent == False:
             print('WARNING: Output path already exists, overwriting previous files')
         pass
+    
+    if silent == False:
+        print('Saving results to', path)
 
     # Write model to file
     if file_type.upper() == 'JSON':
@@ -127,8 +128,12 @@ def save_output(riptide_obj='NULL', path='NULL', file_type='JSON', silent=False)
         with open(outFile, 'w') as maxfit:
             maxfit.write('opt_fraction\tR_value\tp_value\n')
             for index in riptide_obj.maxfit_report.keys():
-                line = str(index) + '\t' + str(riptide_obj.maxfit_report[index]['r']) + '\t' + str(riptide_obj.maxfit_report[index]['p']) + '\n'
+                try:
+                    line = str(index) + '\t' + str(riptide_obj.maxfit_report[index]['r']) + '\t' + str(riptide_obj.maxfit_report[index]['p']) + '\n'
+                except:
+                    line = str(index) + '\t' + str(riptide_obj.maxfit_report[index]) + '\t' '\n'
                 maxfit.write(line)
+
 
     # Assemble parameters and output metrics text file
     outFile = path + '/parameters.txt'
@@ -381,7 +386,7 @@ def _find_best_fit(frac_range, argDict, prev_best=None):
     elif best_fit.concordance['r'] > best_fit_concordance:
         best_fit_concordance = best_fit.concordance['r']
         improved += 1
-        if argDict['silent'] == False: sys.stdout.write('\rProgress: ' + str(float("%.2f" % progress)) + '%  -  improved fit identified (' + str(improved) + ') ')
+        if argDict['silent'] == False: sys.stdout.write('\rProgress: ' + str(float("%.2f" % progress)) + '%  -  improved fit identified (' + str(improved) + ')        ')
     else:
         if argDict['silent'] == False: sys.stdout.write('\rProgress: ' + str(float("%.2f" % progress)) + '%')
         
@@ -412,32 +417,30 @@ def _find_best_fit(frac_range, argDict, prev_best=None):
                 sys.stdout.write('\rProgress: ' + str(float("%.2f" % progress)) + '%  -  fit identified                     ')
             else:
                 improved += 1
-                sys.stdout.write('\rProgress: ' + str(float("%.2f" % progress)) + '%  -  improved fit identified (' + str(improved) + ') ')
+                sys.stdout.write('\rProgress: ' + str(float("%.2f" % progress)) + '%  -  improved fit identified (' + str(improved) + ')        ')
 
     if argDict['silent'] == False:
         if improvement == False and improved == 0:
-            sys.stdout.write('\rProgress: 100% \n\n')
+            sys.stdout.write('\rProgress: 100%        \n\n')
             sys.stdout.flush()
         elif improved == 0 and prev_best == None:
             sys.stdout.write('\rProgress: 100%  -  fit identified                       \n\n')
             sys.stdout.flush()
         else:
             improved += 1
-            sys.stdout.write('\rProgress: 100%  -  improved fit identified (' + str(improved) + ') \n\n')
+            sys.stdout.write('\rProgress: 100%  -  improved fit identified (' + str(improved) + ')         \n\n')
             sys.stdout.flush()
     
     # Check if metabolic tasks can carry flux in the best fit model
-    if argDict['silent'] == False and len(argDict['tasks']) >= 1:
+    tasks = argDict['tasks']
+    if argDict['silent'] == False and len(tasks) >= 1:
         obj_ID = str(best_fit.model.objective.expression).split()[0].split('*')[-1]
-        failed = 0
-        for task in argDict['tasks']:
+        for task in tasks:
             best_fit.model.objective = task
             task_flux = best_fit.model.slim_optimize(error_value=0.)
             if task_flux <= argDict['threshold']:
                 print('WARNING:', task, 'carries no flux in best fitting model')
-                failed += 1
         best_fit.model.objective = obj_ID
-        if failed >= 1: print('\n')
 
     best_fit.maxfit_report = maxfit_report
 
@@ -546,10 +549,9 @@ def maxfit(model, transcriptome = 'none', frac_min = 0.1, frac_max = 0.9, frac_s
     if threshold+1e-6 < 1e-6:
         threshold = abs(threshold)
 
-    if len(tasks) >= 1:
-        screened_tasks = _screen_tasks(model, tasks, silent)
     if task_frac <= 0. or task_frac > 1.:
         task_frac = 0.01
+    if isinstance(tasks, str) == True: tasks = [tasks]
 
     frac_range = [round(x, 3) for x in list(numpy.arange(frac_min, frac_max+frac_step, frac_step))]
     if len(frac_range) == 1:
@@ -557,12 +559,12 @@ def maxfit(model, transcriptome = 'none', frac_min = 0.1, frac_max = 0.9, frac_s
             print('WARNING: Only a single fraction is possible in the input bounds and fraction')
 
     if silent == False:
-        print('Running max fit RIPTiDe for objective fraction range:', frac_min, 'to', frac_max, '...')
+        print('Running max fit RIPTiDe for objective fraction range:', frac_min, 'to', str(frac_max) + '...')
 
     argDict = {'model':model, 'transcriptome':transcriptome, 'silent':silent, 
                'samples':samples, 'minimum':minimum, 'task_frac':task_frac,
                'conservative':conservative, 'objective':objective, 'additive':additive, 
-               'set_bounds':set_bounds, 'tasks':screened_tasks, 'exclude':exclude, 
+               'set_bounds':set_bounds, 'tasks':tasks, 'exclude':exclude, 
                'gpr':gpr, 'threshold':threshold, 'phase':2}
     
     warnings.filterwarnings('ignore', category=UserWarning)
@@ -591,7 +593,7 @@ def maxfit(model, transcriptome = 'none', frac_min = 0.1, frac_max = 0.9, frac_s
     # Check best fit
     if silent == False:
         if top_fit.concordance == 'Not performed':
-            print('No-level of optimal objective flux correlated with transcriptome')
+            print('No level of optimal objective flux correlated with transcriptome')
             print(top_fit.fraction_of_optimum, 'of optimum-associated model returned')
         else:
             print('Context-specific metabolism fit with', top_fit.fraction_of_optimum, 'of optimal objective flux')
@@ -616,13 +618,12 @@ def _screen_tasks(model, tasks, silent):
             rxns = [y.id for y in rxns]
             screened_tasks += rxns
         except:
-            pass
-        # Reactions
-        try:
-            rxn = model.reactions.get_by_id(x)
-            screened_tasks.append(rxn.id)
-        except:
-            pass
+            # Reactions
+            try:
+                rxn = model.reactions.get_by_id(x)
+                screened_tasks.append(rxn.id)
+            except:
+                continue
 
     # Check if any reactions were found in the model that correspond with supplied IDs
     screened_tasks = set(screened_tasks)
@@ -706,7 +707,7 @@ def contextualize(model, transcriptome = 'none', samples = 1000, silent = False,
     if solution < 1e-6:
         raise ValueError('ERROR: Provided model objective cannot carry flux! Please correct')
     minimum_threshold = threshold
-    if isinstance(tasks, list) == False: tasks = [tasks]
+    if isinstance(tasks, str) == True: tasks = [tasks]
 
     # Creates artificial transcriptome to identify most parsimonious patterns of metabolism
     if transcriptome == 'none':
@@ -782,9 +783,8 @@ def contextualize(model, transcriptome = 'none', samples = 1000, silent = False,
                 all_min_coefficient_dict[objective] = [min_coefficient_dict[objective]]
                 all_max_coefficient_dict[objective] = [max_coefficient_dict[objective]]
         if len(tasks) >= 1: 
-            screened_tasks = _screen_tasks(model, tasks, silent)
-            riptide_object.metabolic_tasks = screened_tasks
-            for task in screened_tasks:
+            riptide_object.metabolic_tasks = tasks
+            for task in tasks:
                 min_coefficient_dict[task] = min_coefficient
                 max_coefficient_dict[task] = max_coefficient
                 try:
@@ -794,11 +794,11 @@ def contextualize(model, transcriptome = 'none', samples = 1000, silent = False,
                     all_min_coefficient_dict[task] = [min_coefficient_dict[task]]
                     all_max_coefficient_dict[task] = [max_coefficient_dict[task]]
         else:
-            screened_tasks = []
+            tasks = []
             
         # Determine inactive network sections based on coefficients
         inactive_rxns |= _constrain_for_pruning(model=model, min_coefficients=min_coefficient_dict, 
-                                             objective=objective, obj_fraction=fraction, tasks=screened_tasks, task_fraction=task_frac, 
+                                             objective=objective, obj_fraction=fraction, tasks=tasks, task_fraction=task_frac, 
                                              minimum_flux=minimum_threshold, silent=silent)
     
     # Prune inactive model components
@@ -821,7 +821,7 @@ def contextualize(model, transcriptome = 'none', samples = 1000, silent = False,
 
     # Sample weighted flux distributions
     flux_samples, concordance = _constrain_for_sampling(model=riptide_model, max_coefficients=max_coefficient_dict, sampling_depth=samples,
-                                                        objective=objective, obj_frac=fraction,  tasks=screened_tasks, task_frac=task_frac, 
+                                                        objective=objective, obj_frac=fraction,  tasks=tasks, task_frac=task_frac, 
                                                         min_flux=minimum_threshold,silent=silent)
     riptide_object.flux_samples = flux_samples
     riptide_object.concordance = concordance
