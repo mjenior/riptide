@@ -68,9 +68,12 @@ def save_output(riptide_obj='NULL', path='NULL', file_type='JSON', silent=False)
         if silent == False:
             print('WARNING: Did not provide an output directory. Using default riptide_files in working directory')
         path = riptide_obj.model.id + '_' + riptide_obj.run_start
-    try:
+    else:
         path = path + '_' + riptide_obj.run_start
-        os.mkdir(path)
+    try:
+        # Recursively build dirs if possible
+        os.mkdirs(path)
+        if silent == False: print('Saving results to', path)
     except:
         if silent == False:
             print('WARNING: Output path already exists, overwriting previous files')
@@ -350,7 +353,7 @@ def _rarefy(abunds, n):
 # Simplified to run in parallel
 def _multi_contextualize(args, frac):
     current_fit = contextualize(model=args['model'], transcriptome=args['transcriptome'], fraction=frac, samples=args['samples'], 
-                         minimum=args['minimum'], conservative=args['conservative'], objective=args['objective'], 
+                         minimum=args['minimum'], conservative=args['conservative'], objective=args['objective'], prune=args['prune'], 
                          additive=args['additive'], set_bounds=args['set_bounds'], task_frac=args['task_frac'],
                          tasks=args['tasks'], exclude=args['exclude'], gpr=args['gpr'], threshold=args['threshold'], 
                          phase=2, silent=True)
@@ -562,7 +565,7 @@ def maxfit(model, transcriptome = 'none', frac_min = 0.1, frac_max = 0.9, frac_s
         print('Running max fit RIPTiDe for objective fraction range:', frac_min, 'to', str(frac_max) + '...')
 
     argDict = {'model':model, 'transcriptome':transcriptome, 'silent':silent, 
-               'samples':samples, 'minimum':minimum, 'task_frac':task_frac,
+               'samples':samples, 'minimum':minimum, 'task_frac':task_frac, 'prune':prune,
                'conservative':conservative, 'objective':objective, 'additive':additive, 
                'set_bounds':set_bounds, 'tasks':tasks, 'exclude':exclude, 
                'gpr':gpr, 'threshold':threshold, 'phase':2}
